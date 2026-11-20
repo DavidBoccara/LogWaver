@@ -164,6 +164,7 @@ log_waver/
 ├── requirements.txt / requirements-dev.txt / setup.cfg
 ├── README.md / CHANGELOG.md / CONTRIBUTING.md
 ├── docs/GESTION_DE_CONFIGURATION.md
+├── docs/conception/HISTORIQUE_CONCEPTION.md
 ├── .github/                       # CI, modèles d'issue et de PR
 ├── config/app_config.ini          # catégories, correspondance, éditeur, IA
 ├── plugins/                       # plugin TINTIN + index + PDF d'exemple
@@ -242,3 +243,5 @@ l'architecture MVP, tests sur Linux et Windows) et publication automatique des
 versions étiquetées `vX.Y.Z` : voir
 [`docs/GESTION_DE_CONFIGURATION.md`](docs/GESTION_DE_CONFIGURATION.md),
 [`CONTRIBUTING.md`](CONTRIBUTING.md) et [`CHANGELOG.md`](CHANGELOG.md).
+L'historique de conception (demandes, décisions, vérifications) est dans
+[`docs/conception/HISTORIQUE_CONCEPTION.md`](docs/conception/HISTORIQUE_CONCEPTION.md).

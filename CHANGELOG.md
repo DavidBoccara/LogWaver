@@ -10,6 +10,11 @@ version publiée ci-dessous.
 
 ## [Non publié]
 
+### Documentation
+- Historique complet de la conception de l'outil
+  (`docs/conception/HISTORIQUE_CONCEPTION.md`) : demandes, réponses, travaux
+  réalisés, registre des décisions et couverture des exigences.
+
 ## [1.0.0] - 2026-11-20
 
 ### Ajouté
