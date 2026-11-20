@@ -1,0 +1,4 @@
+PyQt5>=5.15
+PyQtWebEngine>=5.15
+numpy>=1.21
+python-docx>=0.8.11

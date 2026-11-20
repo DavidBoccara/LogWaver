@@ -1,0 +1,11 @@
+TINTIN build tool v4.2 - session start
+[2026-11-21 09:12:00] NOTE NT010 src/main.c:12 - initialisation terminée
+[2026-11-21 09:12:01] WARNING CL245 src/io/loader.c:44 - le fichier dada.txt est introuvable
+[2026-11-21 09:12:01] WARNING CL245 src/io/loader.c:59 - le fichier config_old.txt est introuvable
+[2026-11-21 09:12:02] WARNING CL300 src/core/engine.c:12 - variable 'tmp' déclarée mais jamais utilisée
+[2026-11-21 09:12:02] WARNING CL512 src/core/engine.c:90 - conversion implicite de double vers int
+[2026-11-21 09:12:03] WARNING CL512 src/ui/window.c:203 - conversion implicite de long vers short
+[2026-11-21 09:12:03] WARNING CL245 src/ui/window.c:18 - le fichier theme.qss est introuvable
+[2026-11-21 09:12:04] ERROR ER900 src/core/engine.c:130 - pointeur nul potentiellement déréférencé
+[2026-11-21 09:12:04] ERROR ER901 src/ui/window.c:250 - fuite mémoire détectée
+TINTIN session end: 2 errors, 6 warnings, 1 note

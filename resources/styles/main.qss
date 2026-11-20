@@ -1,0 +1,141 @@
+/* ==========================================================================
+   LogWaver - feuille de style principale
+   Le style visuel est entièrement défini ici ; le code Python ne fait que
+   poser des objectName et des propriétés dynamiques (role, state...).
+   ========================================================================== */
+
+QWidget {
+    font-size: 10pt;
+    color: #1f2933;
+}
+
+QMainWindow, QDialog {
+    background-color: #f4f6f8;
+}
+
+QGroupBox {
+    border: 1px solid #d5dbe1;
+    border-radius: 6px;
+    margin-top: 12px;
+    padding: 8px;
+    background-color: #ffffff;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #2f4f6f;
+}
+
+QLabel#PanelTitle {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #2f4f6f;
+    padding: 4px 0;
+}
+
+QLabel#HintLabel, QLabel#MetaLabel, QLabel#CountLabel {
+    color: #5f6b76;
+    font-style: italic;
+    font-weight: normal;
+}
+
+QLabel#StatusBadge {
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+    color: #ffffff;
+    background-color: #9aa5b1;
+}
+
+QLabel#TestStatus[state="ok"] { color: #2e7d32; font-weight: bold; }
+QLabel#TestStatus[state="warning"] { color: #b26a00; font-weight: bold; }
+QLabel#TestStatus[state="error"] { color: #c62828; font-weight: bold; }
+
+QPushButton {
+    background-color: #ffffff;
+    border: 1px solid #b8c2cc;
+    border-radius: 4px;
+    padding: 5px 12px;
+}
+
+QPushButton:hover { background-color: #e8eef4; }
+QPushButton:pressed { background-color: #d5dee8; }
+QPushButton:disabled { color: #a0aab4; border-color: #dde3e8; }
+
+QPushButton[role="primary"] {
+    background-color: #2f6fb0;
+    border-color: #2a5f96;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+QPushButton[role="primary"]:hover { background-color: #3a7fc4; }
+QPushButton[role="primary"]:disabled { background-color: #9fb9d4; color: #eef3f8; }
+
+QLineEdit, QComboBox, QPlainTextEdit, QTableWidget, QListWidget {
+    background-color: #ffffff;
+    border: 1px solid #c9d1d9;
+    border-radius: 4px;
+    padding: 3px;
+    selection-background-color: #2f6fb0;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {
+    border-color: #2f6fb0;
+}
+
+QTableView#EntryTable {
+    background-color: #ffffff;
+    alternate-background-color: #f7f9fb;
+    gridline-color: #e3e8ed;
+    border: 1px solid #c9d1d9;
+    selection-background-color: #cfe1f5;
+    selection-color: #1f2933;
+}
+
+QHeaderView::section {
+    background-color: #2f4f6f;
+    color: #ffffff;
+    padding: 5px;
+    border: none;
+    border-right: 1px solid #3f6283;
+    font-weight: bold;
+}
+
+QListWidget#CategoryList::item {
+    padding: 7px 4px;
+    border-bottom: 1px solid #eef1f4;
+}
+
+QListWidget#CategoryList::item:selected {
+    background-color: #2f6fb0;
+    color: #ffffff;
+}
+
+QPlainTextEdit#RawLogLine, QPlainTextEdit#PromptText, QPlainTextEdit#CodeViewer {
+    font-family: "Consolas", "DejaVu Sans Mono", monospace;
+    background-color: #fbfcfd;
+}
+
+QToolBar#MainToolbar {
+    background-color: #e9edf1;
+    border-bottom: 1px solid #d5dbe1;
+    spacing: 4px;
+    padding: 3px;
+}
+
+QStatusBar {
+    background-color: #e9edf1;
+    color: #3e4c59;
+}
+
+QSplitter::handle {
+    background-color: #dfe4e9;
+}
+
+QSplitter::handle:horizontal { width: 4px; }
+QSplitter::handle:vertical { height: 4px; }

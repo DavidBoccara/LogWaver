@@ -1,0 +1,33 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# --- Environnements virtuels -------------------------------------------------
+.venv/
+venv/
+env/
+
+# --- Outils de test / qualité -------------------------------------------------
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# --- IDE ----------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Fichiers produits par LogWaver (données de travail, pas du code) --------
+*.lwp
+*.lwj
+*.xlsx
+*.docx
+*.tmp
+~$*

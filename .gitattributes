@@ -1,0 +1,12 @@
+# Normalisation des fins de ligne : LF dans le dépôt, natif à l'extraction.
+* text=auto eol=lf
+
+# Scripts Windows
+*.bat text eol=crlf
+
+# Fichiers binaires (jamais de conversion ni de diff texte)
+*.pdf binary
+*.png binary
+*.ico binary
+*.xlsx binary
+*.docx binary

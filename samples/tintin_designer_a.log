@@ -1,0 +1,11 @@
+TINTIN build tool v4.2 - session start
+[2026-11-20 10:01:00] NOTE NT010 src/main.c:10 - initialisation terminée
+[2026-11-20 10:01:02] WARNING CL245 src/io/loader.c:42 - le fichier dada.txt est introuvable
+[2026-11-20 10:01:02] WARNING CL245 src/io/loader.c:57 - le fichier config_old.txt est introuvable
+[2026-11-20 10:01:03] WARNING CL300 src/core/engine.c:12 - variable 'tmp' déclarée mais jamais utilisée
+[2026-11-20 10:01:03] WARNING CL512 src/core/engine.c:88 - conversion implicite de double vers int
+[2026-11-20 10:01:04] ERROR ER900 src/core/engine.c:128 - pointeur nul potentiellement déréférencé
+[2026-11-20 10:01:05] NOTE NT020 src/main.c:31 - 3 modules chargés
+Some unrelated output line
+[2026-11-20 10:01:06] WARNING CL300 src/io/loader.c:15 - variable 'unused_buffer' déclarée mais jamais utilisée
+TINTIN session end: 1 error, 5 warnings, 2 notes
