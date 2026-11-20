@@ -139,3 +139,119 @@ QSplitter::handle {
 
 QSplitter::handle:horizontal { width: 4px; }
 QSplitter::handle:vertical { height: 4px; }
+
+/* --------------------------------------------------------------------------
+   Prise en main : accueil, bandeau « À faire », didacticiel
+   -------------------------------------------------------------------------- */
+
+QLabel#WelcomeTitle {
+    font-size: 24pt;
+    font-weight: bold;
+    color: #2f4f6f;
+}
+
+QLabel#WelcomeSubtitle {
+    font-size: 12pt;
+    color: #5f6b76;
+}
+
+QFrame#StepCard {
+    background-color: #ffffff;
+    border: 1px solid #d5dbe1;
+    border-radius: 10px;
+    padding: 12px;
+    min-width: 220px;
+    max-width: 320px;
+}
+
+QLabel#StepNumber {
+    background-color: #2f6fb0;
+    color: #ffffff;
+    border-radius: 16px;
+    min-width: 32px;
+    min-height: 32px;
+    max-width: 32px;
+    max-height: 32px;
+    font-size: 13pt;
+    font-weight: bold;
+}
+
+QLabel#StepHeading {
+    font-size: 12pt;
+    font-weight: bold;
+}
+
+QPushButton[role="hero"] {
+    background-color: #2e9d4f;
+    border-color: #26843f;
+    color: #ffffff;
+    font-size: 11pt;
+    font-weight: bold;
+    padding: 9px 18px;
+}
+
+QPushButton[role="hero"]:hover { background-color: #36b35b; }
+QPushButton[role="hero"]:disabled { background-color: #a9d4b6; color: #f0f7f2; }
+
+QPushButton[role="link"] {
+    background: transparent;
+    border: none;
+    color: #2f6fb0;
+    text-decoration: underline;
+}
+
+QLabel#GuideBanner {
+    background-color: #fff8e1;
+    border: 1px solid #f0d58c;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #4a3b00;
+}
+
+QLineEdit#SearchEdit {
+    padding: 6px;
+    font-size: 10.5pt;
+}
+
+QTreeView#EntryTree {
+    background-color: #ffffff;
+    alternate-background-color: #f7f9fb;
+    border: 1px solid #c9d1d9;
+    selection-background-color: #cfe1f5;
+    selection-color: #1f2933;
+}
+
+QTreeView#EntryTree::item {
+    padding: 3px 0;
+}
+
+QDockWidget#TutorialPanel::title {
+    background-color: #2f4f6f;
+    color: #ffffff;
+    padding: 6px;
+}
+
+QWidget#TutorialContent {
+    background-color: #ffffff;
+}
+
+QLabel#TutorialTitle {
+    font-size: 14pt;
+    font-weight: bold;
+    color: #2f4f6f;
+}
+
+QLabel#TutorialText {
+    font-size: 10.5pt;
+    line-height: 140%;
+}
+
+/* Widget mis en évidence par le didacticiel */
+*[tutorialTarget="true"] {
+    border: 3px solid #f39c12;
+    border-radius: 6px;
+}
+
+QWidget#CategoryPanel {
+    min-width: 210px;
+}

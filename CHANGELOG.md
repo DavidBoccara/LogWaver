@@ -10,6 +10,29 @@ version publiée ci-dessous.
 
 ## [Non publié]
 
+### Ajouté
+- **Regroupement** des éléments par code, fichier (chemin ou nom seul),
+  description identique, type, catégorie, auteur, log ou tout autre champ du
+  plugin. Les groupes sont repliables ; sélectionner un groupe sélectionne tous
+  ses éléments, qui sont alors justifiés en une seule action.
+- **Didacticiel interactif** (16 étapes) : panneau dédié, mise en évidence de
+  l'élément d'interface concerné, bouton « Montre-moi » ; proposé au premier
+  lancement, contenu éditable dans `resources/tutorial/didacticiel.ini`.
+- **Détection automatique du plugin** à l'ouverture d'un log.
+- Page d'accueil en trois étapes, bouton « Essayer avec l'exemple fourni ».
+- Bandeau « À faire » indiquant en permanence la prochaine action.
+- Catégorie proposée par défaut configurable (`[statuses] default`).
+
+### Modifié
+- Fenêtre « Justifier » : catégories présentées en boutons à cocher avec leur
+  description, et rappel de ce qui va être justifié (élément ou groupe).
+- Barre d'outils réduite aux actions essentielles, avec icônes ; libellés de
+  menus reformulés (« Partager mes justifications », « Récupérer les
+  justifications d'un collègue »…).
+- Filtres code/fichier/type regroupés sous « Plus de filtres ».
+- Panneau de droite : actions en premier, cadres de détail masqués sans sélection.
+- La liste des éléments est désormais une arborescence (`EntryTree`).
+
 ### Documentation
 - Historique complet de la conception de l'outil
   (`docs/conception/HISTORIQUE_CONCEPTION.md`) : demandes, réponses, travaux

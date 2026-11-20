@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence
 
 from logwaver.constants import (
     CATEGORY_ALL,
@@ -18,6 +18,7 @@ from logwaver.constants import (
     SOURCE_MANUAL,
 )
 from logwaver.model.ai_assistant import AiProvider, AiResponseParser, PromptBuilder
+from logwaver.model.app_config import ApplicationPaths
 from logwaver.model.entities import LogEntry
 from logwaver.model.entry_filter import FilterCriteria
 from logwaver.model.events import (
@@ -27,12 +28,16 @@ from logwaver.model.events import (
     EVENT_PROJECT_CHANGED,
 )
 from logwaver.model.exceptions import LogWaverError
+from logwaver.model.grouping import GROUP_NONE, EntryGrouper, GroupingOption
+from logwaver.model.plugin_detector import PluginDetector
 from logwaver.model.preferences import UserPreferences
 from logwaver.model.session import WaverSession
 from logwaver.model.source_files import ExternalEditorLauncher, SourceFileReader
+from logwaver.model.tutorial import TutorialLoader
 from logwaver.presenter.ai_assistant_presenter import AiAssistantPresenter
 from logwaver.presenter.error_handling import guarded
 from logwaver.presenter.plugin_editor_presenter import PluginEditorPresenter
+from logwaver.presenter.tutorial_presenter import TutorialPresenter
 from logwaver.view_models import (
     ANSWER_CANCEL,
     ANSWER_SAVE,
@@ -40,7 +45,9 @@ from logwaver.view_models import (
     AiHelpData,
     CategoryItem,
     EntryDetails,
+    EntryGroupView,
     EntryRow,
+    GroupingChoice,
     StatusBarInfo,
     StatusChoice,
 )
@@ -61,6 +68,31 @@ EXCEL_FILTER: str = "Classeur Excel (*.xlsx)"
 WORD_FILTER: str = "Document Word (*.docx)"
 UNTITLED_PROJECT: str = "Sans titre"
 MAX_CODES_IN_SUMMARY: int = 10
+MAX_GROUPS_IN_LABEL: int = 3
+
+# Conseils « que faire maintenant ? » affichés au-dessus de la liste.
+GUIDE_TO_JUSTIFY: str = (
+    "<b>À faire :</b> {pending} élément(s) restent à justifier. Sélectionnez une ligne "
+    "(ou un groupe entier) puis cliquez sur <b>✔ Justifier</b>. "
+    "Astuce : « Regrouper par » rassemble les éléments identiques."
+)
+GUIDE_ALL_DONE: str = (
+    "<b>Bravo, tout est justifié !</b> Pensez à <b>Enregistrer</b> le projet, puis "
+    "à <b>Exporter vers Excel</b> ou à partager vos justifications (menu Fichier)."
+)
+GUIDE_CATEGORY_VIEW: str = (
+    "Vous consultez la catégorie <b>{category}</b>. Pour retirer une justification, "
+    "sélectionnez l'élément puis « Retirer la justification »."
+)
+GUIDE_EMPTY_FILTER: str = (
+    "Aucun élément ne correspond aux filtres. Cliquez sur une autre catégorie à "
+    "gauche ou effacez la recherche."
+)
+TUTORIAL_OFFER: str = (
+    "Première utilisation de LogWaver ?\n\nUn didacticiel de 5 minutes vous montre, "
+    "sur un exemple, comment justifier vos warnings. Le lancer maintenant ?\n\n"
+    "(Il reste disponible à tout moment : menu Aide > Didacticiel.)"
+)
 
 
 class MainPresenter:
@@ -72,6 +104,7 @@ class MainPresenter:
         session: WaverSession,
         ai_provider: AiProvider,
         preferences: UserPreferences,
+        paths: ApplicationPaths,
     ) -> None:
         """Initialise le présentateur et s'abonne à la vue et au modèle.
 
@@ -79,6 +112,7 @@ class MainPresenter:
         :param session: session métier.
         :param ai_provider: fournisseur d'IA (terminal par défaut).
         :param preferences: préférences persistantes.
+        :param paths: ressources livrées (plugins, didacticiel, exemple).
         """
         self._view = view
         self._session = session
@@ -88,8 +122,14 @@ class MainPresenter:
         self._ai_parser = AiResponseParser()
         self._source_reader = SourceFileReader()
         self._editor = ExternalEditorLauncher(session.config.editor_command)
+        self._paths = paths
+        self._detector = PluginDetector([paths.plugins_directory])
+        self._grouper = EntryGrouper(session.justification_of, session.config.status_label)
+        self._grouping_key: str = GROUP_NONE
+        self._grouping_options: List[GroupingOption] = []
         self._criteria = FilterCriteria(category=CATEGORY_UNCLASSIFIED)
         self._selected_ids: List[int] = []
+        self._tutorial = self._create_tutorial()
         self._connect_view()
         self._connect_model()
         self._view.set_close_guard(self._can_close)
@@ -111,6 +151,12 @@ class MainPresenter:
             self._session.load_plugin(plugin_path)
         for log_path in log_paths:
             self._open_log_file(log_path)
+        nothing_requested = project_path is None and plugin_path is None and not log_paths
+        if nothing_requested and self._tutorial is not None \
+                and not self._preferences.tutorial_offered:
+            self._preferences.tutorial_offered = True
+            if self._view.ask_yes_no(TUTORIAL_OFFER):
+                self._tutorial.start()
 
     def _report_error(self, message: str) -> None:
         """Affiche une erreur (utilisé par ``guarded``).
@@ -143,6 +189,9 @@ class MainPresenter:
         view.goto_source_requested.connect(self._on_goto_source)
         view.change_user_requested.connect(self._on_change_user)
         view.plugin_editor_requested.connect(self._on_plugin_editor)
+        view.try_sample_requested.connect(self._on_try_sample)
+        view.tutorial_requested.connect(self._on_tutorial)
+        view.grouping_changed.connect(self._on_grouping_changed)
         view.category_selected.connect(self._on_category_selected)
         view.filter_changed.connect(self._on_filter_changed)
         view.selection_changed.connect(self._on_selection_changed)
@@ -262,9 +311,7 @@ class MainPresenter:
 
     @guarded
     def _on_open_log(self) -> None:
-        """Ouvre un fichier de log."""
-        if self._session.plugin is None:
-            raise LogWaverError("Chargez d'abord un plugin (Fichier > Charger un plugin).")
+        """Ouvre un fichier de log (le plugin est détecté automatiquement)."""
         path = self._view.ask_open_file("Ouvrir un fichier de log", LOG_FILTER)
         if path is not None:
             self._open_log_file(path)
@@ -272,10 +319,17 @@ class MainPresenter:
     def _open_log_file(self, path: Path) -> None:
         """Ouvre un log et informe des justifications réappliquées.
 
+        Si aucun plugin n'est chargé, ou si le plugin courant ne reconnaît
+        rien dans ce log, le plugin adapté est recherché automatiquement.
+
         :param path: fichier de log.
-        :raises LogWaverError: si le log est illisible.
+        :raises LogWaverError: si le log est illisible ou qu'aucun plugin ne convient.
         """
+        if self._session.plugin is None:
+            self._load_detected_plugin(path, required=True)
         report = self._session.open_log(path)
+        if report.entry_count == 0 and self._load_detected_plugin(path, required=False):
+            report = self._session.open_log(path)
         self._view.show_status_message(
             f"{path.name} : {report.entry_count} élément(s) extrait(s), "
             f"{report.auto_justified_count} justifié(s) automatiquement."
@@ -285,6 +339,51 @@ class MainPresenter:
                 f"Aucun élément reconnu dans « {path.name} ». Vérifiez que le plugin "
                 "correspond à ce log (Outils > Éditeur de plugin pour tester les regex)."
             )
+
+    def _load_detected_plugin(self, log_path: Path, required: bool) -> bool:
+        """Charge le plugin qui reconnaît le mieux un log.
+
+        :param log_path: log à analyser.
+        :param required: lève une erreur si aucun plugin ne convient.
+        :return: ``True`` si un nouveau plugin a été chargé.
+        :raises LogWaverError: si ``required`` et qu'aucun plugin ne convient.
+        """
+        candidate = self._detector.detect(log_path)
+        if candidate is None:
+            if required:
+                raise LogWaverError(
+                    f"Aucun plugin connu ne reconnaît « {log_path.name} ».\n\n"
+                    "Choisissez un plugin (Fichier > Choisir le plugin) ou créez-en un "
+                    "avec l'éditeur de plugin (menu Outils)."
+                )
+            return False
+        current = self._session.plugin
+        if current is not None and current.source_path == candidate.path:
+            return False
+        plugin = self._session.load_plugin(candidate.path)
+        self._view.set_type_filter_options(plugin.type_names)
+        self._view.show_status_message(
+            f"Outil reconnu automatiquement : {plugin.tool_name} "
+            f"({candidate.matched_lines} ligne(s) reconnue(s))."
+        )
+        return True
+
+    @guarded
+    def _on_try_sample(self) -> None:
+        """Ouvre l'exemple fourni (plugin TINTIN et log du concepteur A)."""
+        self._load_sample()
+
+    def _load_sample(self) -> None:
+        """Charge l'exemple dans une session vierge (après confirmation si besoin).
+
+        :raises LogWaverError: si l'exemple est introuvable.
+        """
+        if not self._confirm_discard():
+            return
+        self._session.new_project()
+        plugin = self._session.load_plugin(self._paths.sample_plugin)
+        self._view.set_type_filter_options(plugin.type_names)
+        self._open_log_file(self._paths.sample_log)
 
     @guarded
     def _on_close_logs(self) -> None:
@@ -302,9 +401,11 @@ class MainPresenter:
         first = self._session.justification_of(entries[0])
         request = self._view.ask_justification(
             self._status_choices(),
+            selection_label=self._selection_label(entries),
             selection_count=len(entries),
             same_code_count=len(same_code_ids),
-            initial_status_id=first.status_id if first else "",
+            initial_status_id=(first.status_id if first
+                               else self._session.config.default_status_id),
             initial_text=first.text if first else "",
         )
         if request is None:
@@ -370,6 +471,34 @@ class MainPresenter:
         """
         self._session.set_user_name(name)
         self._preferences.last_user_name = self._session.user_name
+
+    def _selection_label(self, entries: Sequence[LogEntry]) -> str:
+        """Décrit en clair ce que l'utilisateur s'apprête à justifier.
+
+        :param entries: éléments sélectionnés.
+        :return: description (élément, groupe ou nombre d'éléments).
+        """
+        if len(entries) == 1:
+            entry = entries[0]
+            return f"{entry.entry_type} {entry.code} : {entry.description or entry.raw_text}"
+        groups = self._view.selected_group_values()
+        if groups and self._grouping_key != GROUP_NONE:
+            shown = ", ".join(f"« {value} »" for value in groups[:MAX_GROUPS_IN_LABEL])
+            if len(groups) > MAX_GROUPS_IN_LABEL:
+                shown += "…"
+            return (f"{self._grouping_label()} {shown} : {len(entries)} élément(s) "
+                    "seront justifiés ensemble")
+        return f"{len(entries)} éléments sélectionnés seront justifiés ensemble"
+
+    def _grouping_label(self) -> str:
+        """Retourne le libellé du critère de regroupement actif.
+
+        :return: libellé (vide si aucun regroupement).
+        """
+        for option in self._grouping_options:
+            if option.key == self._grouping_key:
+                return option.label
+        return ""
 
     def _same_code_ids(self, entries: Sequence[LogEntry]) -> List[int]:
         """Retourne les éléments partageant le code d'au moins un élément donné.
@@ -541,7 +670,66 @@ class MainPresenter:
             return None
         return self._session.entry_by_id(self._selected_ids[0])
 
+    # ======================================================== didacticiel
+    def _create_tutorial(self) -> Optional[TutorialPresenter]:
+        """Charge le didacticiel (absent ou invalide : fonction désactivée).
+
+        :return: présentateur du didacticiel, ou ``None``.
+        """
+        try:
+            tutorial = TutorialLoader().load(self._paths.tutorial_file)
+        except LogWaverError as error:
+            LOGGER.warning("Didacticiel indisponible : %s", error)
+            return None
+        return TutorialPresenter(self._view, tutorial, self._tutorial_actions())
+
+    def _tutorial_actions(self) -> Dict[str, Callable[[], None]]:
+        """Associe les noms d'actions du didacticiel à leur réalisation.
+
+        :return: nom d'action → fonction sans argument.
+        """
+        return {
+            "load_sample": self._load_sample,
+            "show_unclassified": lambda: self._select_category(CATEGORY_UNCLASSIFIED),
+            "show_all": lambda: self._select_category(CATEGORY_ALL),
+            "group_by_code": lambda: self._view.select_grouping("field:code"),
+            "group_by_file": lambda: self._view.select_grouping("field:file"),
+            "ungroup": lambda: self._view.select_grouping(GROUP_NONE),
+            "select_first": self._view.select_first_row,
+            "justify": self._on_classify,
+            "undo": self._on_undo,
+        }
+
+    @guarded
+    def _on_tutorial(self) -> None:
+        """Lance le didacticiel."""
+        if self._tutorial is None:
+            raise LogWaverError("Le didacticiel est introuvable "
+                                f"({self._paths.tutorial_file}).")
+        self._tutorial.start()
+
+    def _select_category(self, category: str) -> None:
+        """Affiche une catégorie comme si l'utilisateur l'avait choisie.
+
+        :param category: clé de catégorie.
+        """
+        self._on_category_selected(category)
+        self._refresh_categories()
+
     # ======================================================= vue : filtres
+    @guarded
+    def _on_grouping_changed(self, key: str) -> None:
+        """Change le critère de regroupement.
+
+        :param key: critère choisi.
+        """
+        self._grouping_key = key or GROUP_NONE
+        self._refresh_table()
+        if self._grouping_key != GROUP_NONE:
+            self._view.show_status_message(
+                f"Regroupement par {self._grouping_label().lower()} : sélectionnez un "
+                "groupe puis « Justifier » pour traiter tous ses éléments en une fois.")
+
     @guarded
     def _on_category_selected(self, category: str) -> None:
         """Change la catégorie affichée.
@@ -614,9 +802,57 @@ class MainPresenter:
         ))
 
     def _refresh_table(self) -> None:
-        """Affiche les éléments correspondant aux filtres."""
-        rows = [self._to_row(entry) for entry in self._session.filter_entries(self._criteria)]
-        self._view.set_entries(rows, len(self._session.entries))
+        """Affiche les éléments correspondant aux filtres, groupés ou non."""
+        entries = self._session.filter_entries(self._criteria)
+        total = len(self._session.entries)
+        self._view.show_welcome(not self._session.entries)
+        if self._grouping_key == GROUP_NONE:
+            self._view.set_flat_entries([self._to_row(e) for e in entries], total)
+        else:
+            self._view.set_grouped_entries([
+                EntryGroupView(
+                    value=group.value,
+                    rows=tuple(self._to_row(e) for e in group.entries),
+                    unclassified=sum(1 for e in group.entries
+                                     if self._session.justification_of(e) is None),
+                )
+                for group in self._grouper.group(entries, self._grouping_key)
+            ], total)
+        self._refresh_guide(bool(entries))
+
+    def _refresh_guide(self, has_visible_entries: bool) -> None:
+        """Met à jour le conseil « que faire maintenant ? ».
+
+        :param has_visible_entries: des éléments sont affichés.
+        """
+        pending = self._session.summary().count_for_category(CATEGORY_UNCLASSIFIED)
+        category = self._criteria.category
+        if not has_visible_entries and category == CATEGORY_UNCLASSIFIED and not pending:
+            text = GUIDE_ALL_DONE
+        elif not has_visible_entries:
+            text = GUIDE_EMPTY_FILTER
+        elif category in (CATEGORY_UNCLASSIFIED, CATEGORY_ALL):
+            text = GUIDE_TO_JUSTIFY.format(pending=pending) if pending else GUIDE_ALL_DONE
+        else:
+            text = GUIDE_CATEGORY_VIEW.format(
+                category=self._session.config.status_label(category))
+        self._view.set_guide(text)
+
+    def _refresh_grouping_options(self) -> None:
+        """Propose les critères de regroupement adaptés au plugin chargé."""
+        plugin = self._session.plugin
+        fields: List[str] = []
+        if plugin is not None:
+            for element in plugin.element_types:
+                fields.extend(element.field_names)
+        options = EntryGrouper.available_options(fields)
+        if [o.key for o in options] == [o.key for o in self._grouping_options]:
+            return
+        self._grouping_options = options
+        if self._grouping_key not in {o.key for o in options}:
+            self._grouping_key = GROUP_NONE
+        self._view.set_grouping_options(
+            [GroupingChoice(o.key, o.label) for o in options], self._grouping_key)
 
     def _refresh_selection(self) -> None:
         """Met à jour le panneau de détails et l'état des actions."""
@@ -645,6 +881,9 @@ class MainPresenter:
         """Met à jour le titre, la barre d'état et les actions."""
         path = self._session.project_path
         self._view.set_title(path.name if path else UNTITLED_PROJECT, self._session.is_dirty)
+        plugin = self._session.plugin
+        self._view.set_welcome_plugin(plugin.tool_name if plugin else "")
+        self._refresh_grouping_options()
         self._refresh_categories()
         self._refresh_selection()
 
@@ -695,7 +934,7 @@ class MainPresenter:
                 shown += "…"
             classified = sum(1 for e in entries if self._session.justification_of(e))
             return EntryDetails(
-                title=f"{len(entries)} éléments sélectionnés",
+                title=self._selection_label(entries),
                 fields=(("Codes", shown), ("Déjà classés", str(classified))),
                 raw_text="\n".join(e.raw_text for e in entries[:MAX_CODES_IN_SUMMARY]),
             )

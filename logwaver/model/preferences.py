@@ -13,6 +13,8 @@ LOGGER = logging.getLogger(__name__)
 
 PREFERENCES_FILE_NAME: str = "preferences.json"
 KEY_LAST_USER: str = "last_user_name"
+KEY_TUTORIAL_OFFERED: str = "tutorial_offered"
+TRUE_TEXT: str = "1"
 
 
 class UserPreferences:
@@ -42,6 +44,20 @@ class UserPreferences:
         :param value: nom à mémoriser.
         """
         self._values[KEY_LAST_USER] = value
+        self._save()
+
+    @property
+    def tutorial_offered(self) -> bool:
+        """Indique si le didacticiel a déjà été proposé au premier lancement."""
+        return self._values.get(KEY_TUTORIAL_OFFERED) == TRUE_TEXT
+
+    @tutorial_offered.setter
+    def tutorial_offered(self, value: bool) -> None:
+        """Mémorise que le didacticiel a été proposé.
+
+        :param value: ``True`` une fois la proposition faite.
+        """
+        self._values[KEY_TUTORIAL_OFFERED] = TRUE_TEXT if value else ""
         self._save()
 
     def _load(self) -> Dict[str, str]:

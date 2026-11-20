@@ -19,6 +19,7 @@ et livré. Il s'applique à tout contributeur.
 |---|---|---|
 | Code source | `logwaver/`, `main.py` | code Python |
 | Feuille de style | `resources/styles/main.qss` | QSS |
+| Contenu du didacticiel | `resources/tutorial/didacticiel.ini` | données de paramétrage |
 | Configuration applicative | `config/app_config.ini` | données de paramétrage |
 | Plugins et index PDF | `plugins/*.ini` | données de paramétrage |
 | Documentation d'outil | `plugins/*.pdf` | binaire (référence externe) |

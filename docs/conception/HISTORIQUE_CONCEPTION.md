@@ -22,6 +22,7 @@ menée le 20 novembre 2026 avec l'assistant Claude.
 2. [Échange 2 — Mise sous gestion de configuration](#échange-2)
 3. [Échange 3 — Publication sur le dépôt GitHub](#échange-3)
 4. [Échange 4 — Traçabilité de la conception](#échange-4)
+5. [Échange 5 — Simplification, didacticiel et regroupement](#échange-5)
 5. [Registre des décisions de conception](#registre-des-décisions-de-conception)
 6. [Problèmes rencontrés et traitements](#problèmes-rencontrés-et-traitements)
 7. [Couverture des exigences](#couverture-des-exigences)
@@ -312,6 +313,66 @@ lien dans le `README.md`, sur la branche `docs/historique-conception` issue de
 
 ---
 
+<a id="échange-5"></a>
+## Échange 5 — Simplification, didacticiel et regroupement (21/11, 00:05)
+
+### Demande de l'utilisateur
+
+> C'est parfait mais j'aimerais que l'outil soient plus simple, j'aimerais qu'il soit le plus facile possible à prendre en main, tu peux aussi ajouter un didacticiel. Enfin j'aimerais qu'on puisse ranger les warning par code par exemple enfaîte qu'on puisse collapser un ensemble d'élément par texte redondant ça veux dire que si l'utilisateur veux collapser tous les élément par nom de fichier alors il peux ce qui permet quand on sélectionne le fichier de justifier automatiquement tous les warning relié au fichier en question, cette exemple peut être fait pas fichier ou par code ou par n'importe quelle élément choisi
+
+### Travail réalisé (résumé chronologique)
+
+1. **État du dépôt** : la pull request de l'historique n'étant pas encore
+   fusionnée, la branche `feature/prise-en-main-regroupement` a été créée à
+   partir de `docs/historique-conception` (afin de pouvoir compléter ce
+   document).
+2. **Regroupement (modèle)** — `model/grouping.py` : critères Code, Fichier
+   (chemin / nom seul), Description identique, Type, Catégorie, Auteur, Log,
+   plus tout champ propre au plugin ; groupes triés du plus grand au plus petit.
+3. **Détection automatique du plugin** — `model/plugin_detector.py` : chaque
+   plugin du dossier `plugins/` est essayé sur les premières lignes du log, le
+   plus efficace est retenu ; les `.ini` qui ne sont pas des plugins (index PDF)
+   sont ignorés.
+4. **Didacticiel (modèle)** — `model/tutorial.py` (lecture INI, progression) et
+   contenu `resources/tutorial/didacticiel.ini` (16 étapes).
+5. **Vues** : la table plate est remplacée par une arborescence
+   (`view/entry_tree_model.py`, `view/widgets/entry_tree.py`) où sélectionner un
+   groupe sélectionne tous ses éléments ; nouvelle barre de filtres
+   (recherche + « Regrouper par » + « Plus de filtres ») ; page d'accueil
+   (`welcome_page.py`) ; panneau du didacticiel (`tutorial_panel.py`) ; fenêtre
+   « Justifier » à boutons radio décrits ; panneau de droite réordonné ;
+   fenêtre principale réécrite (accueil / espace de travail, bandeau « À faire »,
+   barre d'outils réduite avec icônes, menus reformulés).
+6. **Présentateurs** : `presenter/tutorial_presenter.py` ; dans
+   `main_presenter.py` : regroupement, détection du plugin, exemple fourni,
+   bandeau « À faire », libellé de sélection (« Code « CL245 » : 3 éléments »),
+   proposition du didacticiel au premier lancement, actions « Montre-moi ».
+7. **Configuration** : catégorie proposée par défaut (`[statuses] default`).
+8. **Vérifications** :
+   * pilotage complet de l'interface hors écran : accueil, détection de TINTIN
+     sans plugin choisi, regroupement par code puis par fichier, justification
+     d'un groupe entier, annulation, didacticiel parcouru de bout en bout avec
+     toutes ses actions (cibles mises en évidence vérifiées à chaque étape) ;
+   * revue visuelle par captures (accueil, vue groupée, didacticiel, fenêtre
+     « Justifier ») suivie de deux retouches : cadres de détail masqués sans
+     sélection, largeur minimale du panneau des catégories ;
+   * 13 nouveaux tests (`tests/test_ease_of_use.py`, 2 tests d'IHM) :
+     **43 tests réussis**, style PEP 8, analyse statique et contrôle MVP verts.
+9. **Documentation** : README (prise en main, regroupement, partage,
+   arborescence), CHANGELOG (rubrique « Non publié »), plan de gestion de
+   configuration (nouvel élément de configuration : le didacticiel), présent
+   historique.
+
+### Réponse de l'assistant (résumé)
+
+La réponse rend compte des trois évolutions (regroupement, simplification,
+didacticiel), des vérifications effectuées, de la branche poussée et de la
+pull request à ouvrir. Son texte intégral sera ajouté à ce document lors de la
+prochaine mise à jour de l'historique, une réponse ne pouvant pas être versionnée
+avant d'avoir été rédigée.
+
+---
+
 ## Registre des décisions de conception
 
 | N° | Décision | Raison | Alternatives écartées |
@@ -340,6 +401,14 @@ lien dans le `README.md`, sur la branche `docs/historique-conception` issue de
 | D22 | Limite de ligne PEP 8 portée à **99 caractères** (`setup.cfg`) | Autorisée par la PEP 8 ; lisibilité des signatures typées | 79 caractères |
 | D23 | Gestion de configuration : **SemVer**, Git Flow simplifié, Conventional Commits, CI GitHub Actions Linux/Windows, publication sur étiquette | Traçabilité et lignes de base livrées | — |
 | D24 | Produits de travail utilisateurs (`.lwp`, `.lwj`, exports) **exclus** du dépôt | Ce sont des données des projets utilisateurs, pas des éléments de configuration de l'outil | Les versionner avec l'outil |
+| D25 | **Arborescence** (`QTreeView` + `QStandardItemModel`) à la place de la table, à plat ou groupée selon le critère choisi | Permet de replier les éléments redondants tout en gardant une seule vue | Deux vues distinctes (table et arbre) |
+| D26 | **Sélectionner un groupe = sélectionner tous ses éléments** ; la justification reste l'action habituelle (« ✔ Justifier ») | Un seul geste à apprendre, valable pour un élément comme pour un groupe | Bouton spécifique « Justifier le groupe » |
+| D27 | Regroupement calculé dans le **modèle** (`EntryGrouper`), critères proposés selon les champs du plugin | Testable sans IHM ; « n'importe quel élément choisi » couvert automatiquement | Regroupement fait par la vue |
+| D28 | **Détection automatique du plugin** par le nombre de lignes reconnues | Supprime l'étape la plus technique (choisir un plugin) | Association manuelle extension → plugin |
+| D29 | Didacticiel **décrit dans un fichier INI** (texte, widget ciblé, action) et affiché dans un **panneau ancré** ; mise en évidence par propriété dynamique stylée en QSS | Contenu modifiable sans code ; respecte les interdictions de positionnement absolu et de style dans le code | Bulles superposées positionnées en absolu |
+| D30 | Actions **« Montre-moi »** exécutées par le présentateur principal et référencées par nom | Le didacticiel montre le vrai fonctionnement, sur de vraies données | Captures ou animations figées |
+| D31 | **Bandeau « À faire »** contextuel, page d'accueil en 3 étapes, barre d'outils réduite, filtres avancés repliés | Réduire la charge cognitive : l'utilisateur voit toujours l'action suivante | Documentation seule |
+| D32 | Catégorie **proposée par défaut** configurable (`justified` dans l'exemple) | Cas le plus fréquent en un clic, sans figer d'identifiant dans le code | Première catégorie de la liste |
 
 ## Problèmes rencontrés et traitements
 
@@ -353,6 +422,9 @@ lien dans le `README.md`, sur la branche `docs/historique-conception` issue de
 | Visionneuse PDF non testable dans l'environnement (pas d'OpenGL, exécution en root) | Calcul des pages testé unitairement ; repli système conservé ; conseil de dépannage dans le README |
 | `gh` non authentifié, création de dépôt impossible depuis la session | Dépôt créé par l'utilisateur, puis rattaché et poussé |
 | Push de l'étiquette `v1.0.0` coupé par la connexion de la session | Procédure manuelle fournie à l'utilisateur |
+| Test d'IHM du didacticiel réussissant à tort (fenêtre non affichée pendant le test) | Test rendu strict (fenêtre affichée, progression vérifiée sur l'état du présentateur) |
+| « Montre-moi » déclenché sur une étape sans action provoquait une erreur (révélé par le test strict) | Le présentateur ignore désormais ce cas |
+| Cadres de détail vides affichés sans sélection ; catégories tronquées didacticiel ouvert | Cadres masqués sans sélection ; largeur minimale du panneau des catégories (QSS) |
 
 ## Couverture des exigences
 
@@ -377,3 +449,6 @@ lien dans le `README.md`, sur la branche `docs/historique-conception` issue de
 | Interface responsive par layouts, style séparé en QSS | Aucun positionnement absolu ; `resources/styles/main.qss` |
 | Structure de fichiers, code complet, guide d'installation | `README.md` |
 | Gestion de configuration | `docs/GESTION_DE_CONFIGURATION.md`, `CHANGELOG.md`, `.github/` |
+| Outil le plus simple possible à prendre en main | Page d'accueil, détection du plugin, bandeau « À faire », barre d'outils réduite, fenêtre « Justifier » simplifiée |
+| Didacticiel | `resources/tutorial/didacticiel.ini`, `TutorialPanel`, `TutorialPresenter` |
+| Replier les éléments par texte redondant (code, fichier, tout champ) et justifier tout un groupe | `model/grouping.py`, `EntryTree`, « Regrouper par » |
