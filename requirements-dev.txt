@@ -1,0 +1,4 @@
+# Outils de développement uniquement (jamais requis pour exécuter LogWaver).
+-r requirements.txt
+pycodestyle>=2.11
+pyflakes>=3.1
