@@ -28,7 +28,7 @@ Open XML généré par la bibliothèque standard).
 ## 2. Lancement
 
 ```bash
-python main.py                                     # fenêtre vide
+python main.py                                     # page d'accueil
 python main.py --plugin plugins/tintin.ini --log samples/tintin_designer_a.log
 python main.py --project mon_projet.lwp --log nouveau_build.log
 python main.py --debug                             # journal détaillé
@@ -37,7 +37,7 @@ python main.py --debug                             # journal détaillé
 | Option | Rôle |
 |---|---|
 | `--config` | fichier de configuration (défaut : `config/app_config.ini`) |
-| `--plugin` | plugin à charger |
+| `--plugin` | plugin à imposer (sinon détection automatique) |
 | `--log` | log à ouvrir (option répétable) |
 | `--project` | projet à ouvrir |
 
@@ -50,24 +50,58 @@ Tests unitaires (bibliothèque standard uniquement) :
 python -m unittest discover -s tests -t .
 ```
 
-## 3. Prise en main en 2 minutes (exemple TINTIN fourni)
+## 3. Prise en main
 
-1. `python main.py --plugin plugins/tintin.ini --log samples/tintin_designer_a.log`
-2. La vue s'ouvre sur **Non justifiés (sans classe)**. Sélectionnez une ou plusieurs
-   lignes (Ctrl/Maj + clic), puis **Classer / Justifier…** (Ctrl+J ou double-clic).
-   À la première justification, votre nom est demandé, puis mémorisé.
-3. Cochez « Appliquer à tous les éléments ayant le même code » pour justifier
-   toutes les occurrences d'un code en une fois. Les éléments quittent la liste
+### 3.1 Le plus simple : le didacticiel
+
+Au premier lancement, LogWaver propose un **didacticiel de 5 minutes** (16 étapes).
+Il charge un exemple, encadre en orange l'élément de l'écran dont il parle, et
+un bouton **« Montre-moi »** réalise l'action à votre place si vous le souhaitez.
+Il reste disponible à tout moment : bouton **Didacticiel** ou **Maj+F1**.
+
+Son contenu est dans `resources/tutorial/didacticiel.ini`, modifiable à la main
+(titres, textes, widget à encadrer, action proposée).
+
+### 3.2 Utilisation courante en 3 gestes
+
+1. **Ouvrir un log** : l'outil qui l'a produit est **reconnu automatiquement**
+   parmi les plugins du dossier `plugins/` (plus besoin de choisir un plugin).
+2. **Justifier** : sélectionnez un élément — ou un **groupe entier** — puis
+   **✔ Justifier** (ou double-clic). Cochez la catégorie, écrivez pourquoi,
+   validez. Votre nom n'est demandé qu'une fois. Les éléments quittent la liste
    « Non justifiés » et rejoignent leur catégorie.
-4. **Ctrl+Z / Ctrl+Y** annulent / rétablissent. **Suppr** retire la justification
-   (l'élément repasse en « Non justifiés »).
-5. **Ctrl+S** enregistre le projet (`.lwp`). **Ctrl+E** exporte vers Excel.
-6. Héritage : ouvrez `samples/tintin_designer_b.log` dans une autre session,
-   puis **Fichier > Importer des justifications…** avec le fichier `.lwj`
-   exporté par le concepteur A : seuls les warnings nouveaux restent à traiter.
+3. **Enregistrer** (Ctrl+S) puis **Exporter vers Excel** (Ctrl+E).
 
-Raccourcis : F1 documentation PDF à la page du code, Ctrl+G aller à la ligne,
-Ctrl+I aide IA, Ctrl+F rechercher, Ctrl+R éditeur de plugin.
+Le bandeau jaune au-dessus de la liste indique toujours **quoi faire ensuite**.
+**Ctrl+Z / Ctrl+Y** annulent / rétablissent ; **Suppr** retire une justification.
+
+### 3.3 Regrouper pour justifier en masse
+
+Le menu **Regrouper par** rassemble les éléments qui ont la même valeur :
+
+| Critère | Exemple d'usage |
+|---|---|
+| Code | justifier toutes les occurrences du warning CL245 |
+| Fichier (chemin complet ou nom seul) | justifier tous les warnings d'un fichier tiers |
+| Description (texte identique) | traiter un message répété mot pour mot |
+| Type d'élément, catégorie, auteur, log | revue, contrôle, répartition du travail |
+| Tout autre champ extrait par le plugin | ajouté automatiquement à la liste |
+
+Chaque groupe est replié et affiche son nombre d'éléments (dont non justifiés).
+**Sélectionner la ligne d'un groupe sélectionne tous ses éléments** : un clic sur
+« ✔ Justifier » les justifie tous ensemble. « Tout déplier / Tout replier » et
+le menu du clic droit permettent d'explorer les groupes.
+
+### 3.4 Partager avec un collègue
+
+Concepteur A : **Fichier > Partager mes justifications…** (fichier `.lwj`).
+Concepteur B : **Fichier > Récupérer les justifications d'un collègue…** : seuls
+les éléments vraiment nouveaux restent à traiter. Essai avec l'exemple :
+`samples/tintin_designer_a.log` puis `samples/tintin_designer_b.log`.
+
+Raccourcis : F1 documentation PDF à la page du code, Ctrl+G fichier source à la
+ligne, Ctrl+I aide IA, Ctrl+F rechercher, Ctrl+R éditeur de plugin, Maj+F1
+didacticiel.
 
 ## 4. Fichiers manipulés
 
@@ -164,12 +198,14 @@ log_waver/
 ├── requirements.txt / requirements-dev.txt / setup.cfg
 ├── README.md / CHANGELOG.md / CONTRIBUTING.md
 ├── docs/GESTION_DE_CONFIGURATION.md
+├── docs/conception/HISTORIQUE_CONCEPTION.md
 ├── .github/                       # CI, modèles d'issue et de PR
 ├── config/app_config.ini          # catégories, correspondance, éditeur, IA
 ├── plugins/                       # plugin TINTIN + index + PDF d'exemple
 ├── resources/styles/main.qss      # tout le style visuel (séparé du code)
+├── resources/tutorial/            # contenu du didacticiel (INI éditable)
 ├── samples/                       # logs des concepteurs A et B + sources
-├── tests/                         # unittest (30 tests, dont 1 test d'IHM)
+├── tests/                         # unittest (43 tests, dont 3 tests d'IHM)
 └── logwaver/
     ├── constants.py               # constantes UPPER_CASE centralisées
     ├── logging_setup.py           # journal console + fichier tournant
@@ -189,7 +225,10 @@ log_waver/
     │   ├── regex_tools.py         # testeur + générateur de regex
     │   ├── pdf_index.py           # code -> page de documentation
     │   ├── source_files.py        # lecture source, éditeur externe
-    │   ├── preferences.py         # dernier utilisateur
+    │   ├── preferences.py         # dernier utilisateur, didacticiel proposé
+    │   ├── grouping.py            # regroupement par code, fichier, champ…
+    │   ├── plugin_detector.py     # détection automatique du plugin
+    │   ├── tutorial.py            # lecture et progression du didacticiel
     │   ├── events.py              # patron Observateur
     │   ├── app_config.py / exceptions.py
     │   └── exporters/             # xlsx_writer, excel_exporter, docx_exporter
@@ -197,12 +236,14 @@ log_waver/
     │   ├── main_presenter.py
     │   ├── ai_assistant_presenter.py
     │   ├── plugin_editor_presenter.py
+    │   ├── tutorial_presenter.py
     │   └── error_handling.py      # décorateur @guarded (try/except + logs)
     └── view/                      # VUES : widgets passifs, signaux uniquement
         ├── main_window.py
-        ├── entry_table_model.py   # adaptateur QAbstractTableModel
+        ├── entry_tree_model.py    # modèle Qt : liste à plat ou groupes repliables
         ├── style_loader.py
-        ├── widgets/               # filter_bar, category_panel, details_panel
+        ├── widgets/               # entry_tree, filter_bar, category_panel,
+        │                          # details_panel, welcome_page, tutorial_panel
         └── dialogs/               # justification, aide IA, éditeur de plugin,
                                    # visionneuse source, visionneuse PDF
 ```
@@ -242,3 +283,5 @@ l'architecture MVP, tests sur Linux et Windows) et publication automatique des
 versions étiquetées `vX.Y.Z` : voir
 [`docs/GESTION_DE_CONFIGURATION.md`](docs/GESTION_DE_CONFIGURATION.md),
 [`CONTRIBUTING.md`](CONTRIBUTING.md) et [`CHANGELOG.md`](CHANGELOG.md).
+L'historique de conception (demandes, décisions, vérifications) est dans
+[`docs/conception/HISTORIQUE_CONCEPTION.md`](docs/conception/HISTORIQUE_CONCEPTION.md).

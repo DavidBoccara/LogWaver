@@ -53,12 +53,14 @@ class AppConfig:
     :param matching: options de correspondance des justifications.
     :param editor_command: commande d'éditeur externe (``{file}``/``{line}``).
     :param ai_language: langue des prompts générés.
+    :param default_status_id: catégorie proposée par défaut lors d'une justification.
     """
 
     statuses: Tuple[StatusDefinition, ...]
     matching: MatchingOptions = MatchingOptions()
     editor_command: str = ""
     ai_language: str = DEFAULT_AI_LANGUAGE
+    default_status_id: str = ""
 
     def find_status(self, status_id: str) -> Optional[StatusDefinition]:
         """Recherche une catégorie par identifiant.
@@ -79,6 +81,36 @@ class AppConfig:
         """
         status = self.find_status(status_id)
         return status.label if status else status_id
+
+
+@dataclass(frozen=True)
+class ApplicationPaths:
+    """Emplacements des ressources livrées avec l'application.
+
+    :param plugins_directory: dossier des plugins (détection automatique).
+    :param tutorial_file: fichier INI du didacticiel.
+    :param sample_plugin: plugin de l'exemple fourni.
+    :param sample_log: log de l'exemple fourni.
+    """
+
+    plugins_directory: Path
+    tutorial_file: Path
+    sample_plugin: Path
+    sample_log: Path
+
+    @classmethod
+    def from_root(cls, root: Path) -> "ApplicationPaths":
+        """Construit les chemins standards à partir du dossier de l'application.
+
+        :param root: dossier contenant ``main.py``.
+        :return: chemins des ressources.
+        """
+        return cls(
+            plugins_directory=root / "plugins",
+            tutorial_file=root / "resources" / "tutorial" / "didacticiel.ini",
+            sample_plugin=root / "plugins" / "tintin.ini",
+            sample_log=root / "samples" / "tintin_designer_a.log",
+        )
 
 
 class AppConfigLoader:
@@ -107,6 +139,11 @@ class AppConfigLoader:
         ai_language = parser.get(
             SECTION_AI, "language", fallback=DEFAULT_AI_LANGUAGE
         )
+        default_status = parser.get(SECTION_STATUSES, "default", fallback="").strip()
+        if default_status and default_status not in {s.status_id for s in statuses}:
+            raise ConfigurationError(
+                f"La catégorie par défaut « {default_status} » n'est pas déclarée."
+            )
         LOGGER.info(
             "Configuration chargée : %d catégories, clés=%s",
             len(statuses),
@@ -117,6 +154,7 @@ class AppConfigLoader:
             matching=matching,
             editor_command=editor_command.strip(),
             ai_language=ai_language.strip() or DEFAULT_AI_LANGUAGE,
+            default_status_id=default_status,
         )
 
     def _read_statuses(

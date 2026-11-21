@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 
 from logwaver.view_models import ActionsState, EntryDetails
 
-EMPTY_TITLE: str = "Aucun élément sélectionné"
+EMPTY_TITLE: str = "Sélectionnez un élément ou un groupe dans la liste"
 
 
 class DetailsPanel(QWidget):
@@ -40,6 +40,8 @@ class DetailsPanel(QWidget):
         self._title.setObjectName("PanelTitle")
         self._title.setWordWrap(True)
         self._fields_box = QGroupBox("Informations extraites")
+        self._raw_label = QLabel("Ligne du log :")
+        self._justification_box = QGroupBox("Justification")
         self._fields_layout = QFormLayout(self._fields_box)
         self._raw_text = QPlainTextEdit()
         self._raw_text.setObjectName("RawLogLine")
@@ -51,12 +53,23 @@ class DetailsPanel(QWidget):
         self._meta_label.setObjectName("MetaLabel")
         self._justification_text = QPlainTextEdit()
         self._justification_text.setReadOnly(True)
-        self._classify_button = QPushButton("Classer / Justifier…")
-        self._classify_button.setProperty("role", "primary")
+        self._classify_button = QPushButton("✔ Justifier…")
+        self._classify_button.setObjectName("JustifyButton")
+        self._classify_button.setProperty("role", "hero")
+        self._classify_button.setToolTip("Classer la sélection et expliquer pourquoi (Ctrl+J)")
         self._unclassify_button = QPushButton("Retirer la justification")
-        self._ai_button = QPushButton("Aide IA…")
-        self._doc_button = QPushButton("Documentation PDF")
-        self._source_button = QPushButton("Aller à la ligne")
+        self._unclassify_button.setObjectName("UnjustifyButton")
+        self._unclassify_button.setToolTip("L'élément redevient « non justifié » (Suppr)")
+        self._ai_button = QPushButton("Demander à l'IA…")
+        self._ai_button.setObjectName("AiButton")
+        self._ai_button.setToolTip("Obtenir une explication et une proposition de "
+                                   "justification (Ctrl+I)")
+        self._doc_button = QPushButton("Voir la documentation")
+        self._doc_button.setObjectName("DocButton")
+        self._doc_button.setToolTip("Ouvrir le PDF de l'outil à la page de ce code (F1)")
+        self._source_button = QPushButton("Ouvrir le fichier source")
+        self._source_button.setObjectName("SourceButton")
+        self._source_button.setToolTip("Afficher le fichier à la ligne concernée (Ctrl+G)")
         self._build_layout()
         self._connect_signals()
         self.show_details(None)
@@ -67,6 +80,7 @@ class DetailsPanel(QWidget):
         :param details: contenu à afficher, ``None`` pour vider.
         """
         self._clear_fields()
+        self._set_detail_sections_visible(details is not None)
         if details is None:
             self._title.setText(EMPTY_TITLE)
             self._raw_text.clear()
@@ -108,6 +122,7 @@ class DetailsPanel(QWidget):
         :param text: justification.
         """
         self._status_label.setText(status or "Non justifié")
+        self._justification_text.setVisible(bool(text))
         # La couleur provient du fichier de configuration (donnée métier) ;
         # le reste du style du badge est défini dans le QSS.
         self._status_label.setStyleSheet(
@@ -119,6 +134,15 @@ class DetailsPanel(QWidget):
         self._meta_label.setText(meta)
         self._justification_text.setPlainText(text)
 
+    def _set_detail_sections_visible(self, visible: bool) -> None:
+        """Masque les cadres de détail tant que rien n'est sélectionné.
+
+        :param visible: ``True`` si une sélection est affichée.
+        """
+        for widget in (self._fields_box, self._raw_label, self._raw_text,
+                       self._justification_box):
+            widget.setVisible(visible)
+
     def _clear_fields(self) -> None:
         """Supprime les lignes du formulaire des champs."""
         while self._fields_layout.rowCount():
@@ -126,24 +150,28 @@ class DetailsPanel(QWidget):
 
     def _build_layout(self) -> None:
         """Dispose les widgets verticalement."""
-        justification_box = QGroupBox("Justification")
-        justification_layout = QVBoxLayout(justification_box)
+        justification_layout = QVBoxLayout(self._justification_box)
         justification_layout.addWidget(self._status_label)
         justification_layout.addWidget(self._meta_label)
         justification_layout.addWidget(self._justification_text)
-        actions_box = QGroupBox("Actions")
+        actions_box = QGroupBox("Que voulez-vous faire ?")
         actions_layout = QVBoxLayout(actions_box)
-        for button in (self._classify_button, self._unclassify_button,
-                       self._ai_button, self._doc_button, self._source_button):
-            actions_layout.addWidget(button)
+        actions_layout.addWidget(self._classify_button)
+        actions_layout.addWidget(self._unclassify_button)
+        help_box = QGroupBox("Besoin d'aide pour décider ?")
+        help_layout = QVBoxLayout(help_box)
+        for button in (self._ai_button, self._doc_button, self._source_button):
+            help_layout.addWidget(button)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._title)
-        layout.addWidget(self._fields_box)
-        layout.addWidget(QLabel("Ligne du log :"))
-        layout.addWidget(self._raw_text)
-        layout.addWidget(justification_box, stretch=1)
         layout.addWidget(actions_box)
+        layout.addWidget(help_box)
+        layout.addWidget(self._fields_box)
+        layout.addWidget(self._raw_label)
+        layout.addWidget(self._raw_text)
+        layout.addWidget(self._justification_box, stretch=1)
+        layout.addStretch(0)
 
     def _connect_signals(self) -> None:
         """Relie les boutons aux signaux publics."""

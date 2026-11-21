@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from logwaver.constants import APP_NAME, APP_ORGANIZATION
 from logwaver.logging_setup import configure_logging
 from logwaver.model.ai_assistant import TerminalPromptProvider
-from logwaver.model.app_config import AppConfigLoader
+from logwaver.model.app_config import AppConfigLoader, ApplicationPaths
 from logwaver.model.exceptions import LogWaverError
 from logwaver.model.preferences import UserPreferences
 from logwaver.model.session import WaverSession
@@ -83,7 +83,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     session = WaverSession(config)
     window = MainWindow()
-    presenter = MainPresenter(window, session, TerminalPromptProvider(), UserPreferences())
+    presenter = MainPresenter(window, session, TerminalPromptProvider(), UserPreferences(),
+                              ApplicationPaths.from_root(APPLICATION_ROOT))
     window.show()
     presenter.startup(arguments.plugin, arguments.log, arguments.project)
     exit_code = application.exec_()

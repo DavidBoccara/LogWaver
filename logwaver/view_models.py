@@ -44,6 +44,32 @@ class EntryRow:
 
 
 @dataclass(frozen=True)
+class EntryGroupView:
+    """Groupe d'éléments affiché comme une ligne repliable.
+
+    :param value: valeur commune du groupe (identifie le groupe).
+    :param rows: éléments du groupe.
+    :param unclassified: nombre d'éléments non justifiés du groupe.
+    """
+
+    value: str
+    rows: Tuple[EntryRow, ...]
+    unclassified: int
+
+
+@dataclass(frozen=True)
+class GroupingChoice:
+    """Critère de regroupement proposé dans la barre de filtres.
+
+    :param key: identifiant du critère.
+    :param label: libellé affiché.
+    """
+
+    key: str
+    label: str
+
+
+@dataclass(frozen=True)
 class CategoryItem:
     """Entrée du panneau des catégories.
 
