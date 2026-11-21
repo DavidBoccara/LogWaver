@@ -10,6 +10,8 @@ version publiée ci-dessous.
 
 ## [Non publié]
 
+## [1.1.0] - 2026-11-21
+
 ### Ajouté
 - **Regroupement** des éléments par code, fichier (chemin ou nom seul),
   description identique, type, catégorie, auteur, log ou tout autre champ du
@@ -58,5 +60,6 @@ version publiée ci-dessous.
 - Exports Excel (sans bibliothèque tierce) et Word.
 - Exemple complet TINTIN (plugin, index, PDF, logs des concepteurs A et B).
 
-[Non publié]: https://github.com/DavidBoccara/LogWaver/compare/v1.0.0...HEAD
+[Non publié]: https://github.com/DavidBoccara/LogWaver/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/DavidBoccara/LogWaver/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/DavidBoccara/LogWaver/releases/tag/v1.0.0

@@ -23,6 +23,7 @@ menée le 20 novembre 2026 avec l'assistant Claude.
 3. [Échange 3 — Publication sur le dépôt GitHub](#échange-3)
 4. [Échange 4 — Traçabilité de la conception](#échange-4)
 5. [Échange 5 — Simplification, didacticiel et regroupement](#échange-5)
+6. [Échange 6 — Publication de la version 1.1.0](#échange-6)
 5. [Registre des décisions de conception](#registre-des-décisions-de-conception)
 6. [Problèmes rencontrés et traitements](#problèmes-rencontrés-et-traitements)
 7. [Couverture des exigences](#couverture-des-exigences)
@@ -363,13 +364,78 @@ lien dans le `README.md`, sur la branche `docs/historique-conception` issue de
    configuration (nouvel élément de configuration : le didacticiel), présent
    historique.
 
-### Réponse de l'assistant (résumé)
+### Réponse de l'assistant (texte intégral)
 
-La réponse rend compte des trois évolutions (regroupement, simplification,
-didacticiel), des vérifications effectuées, de la branche poussée et de la
-pull request à ouvrir. Son texte intégral sera ajouté à ce document lors de la
-prochaine mise à jour de l'historique, une réponse ne pouvant pas être versionnée
-avant d'avoir été rédigée.
+> J'ai fait les trois évolutions : un outil plus simple à prendre en main, un didacticiel et le regroupement des éléments. Elles sont poussées sur une nouvelle branche `feature/prise-en-main-regroupement`, pas encore dans `develop`.
+>
+> **Ranger et replier par texte redondant**
+> - Le menu **« Regrouper par »**, au-dessus de la liste, propose : code, fichier (chemin complet ou nom seul), description identique, type, catégorie, auteur ou fichier de log.
+> - Tout autre champ défini dans le plugin est ajouté automatiquement à ce menu : on peut donc regrouper par n'importe quel élément.
+> - Chaque groupe est replié et affiche son nombre d'éléments, dont ceux encore à justifier.
+> - **Sélectionner la ligne d'un groupe sélectionne tous ses éléments.** Un clic sur « ✔ Justifier » les justifie tous d'un coup. Par exemple, avec un regroupement par fichier, sélectionner `src/core/engine.c` justifie ses 3 warnings ensemble.
+>
+> **Plus simple à prendre en main**
+> - Une **page d'accueil en 3 étapes** remplace la fenêtre vide, avec un bouton « Essayer avec l'exemple fourni ».
+> - **Plus besoin de choisir un plugin** : à l'ouverture d'un log, l'outil qui l'a produit est reconnu automatiquement.
+> - Un **bandeau jaune « À faire »** indique toujours la prochaine action et combien d'éléments restent à justifier.
+> - La **fenêtre « Justifier »** présente les catégories en boutons à cocher, chacune avec son explication. Elle rappelle ce qui va être justifié et propose « Justifié / Accepté » par défaut.
+> - La **barre d'outils** est réduite à 7 boutons avec icônes. Les filtres avancés sont rangés sous « Plus de filtres ». Les menus parlent plus simplement, par exemple « Partager mes justifications ».
+>
+> **Didacticiel**
+> - Il compte 16 étapes et est proposé au premier lancement. On peut le relancer à tout moment avec le bouton « Didacticiel » ou Maj+F1.
+> - Il s'affiche dans un panneau à droite et encadre en orange l'élément de l'écran dont il parle.
+> - Un bouton **« Montre-moi »** fait l'action à la place de l'utilisateur : ouvrir l'exemple, regrouper par code, sélectionner un groupe, le justifier, annuler…
+> - Son texte se modifie à la main dans `resources/tutorial/didacticiel.ini`, sans toucher au code.
+>
+> **Vérifications**
+> - 43 tests passent, dont 13 nouveaux. Les contrôles de style, l'analyse statique et la vérification de l'architecture passent aussi.
+> - J'ai joué tout le parcours dans l'interface : reconnaissance du plugin sans choix manuel, regroupement par code puis par fichier, justification d'un groupe entier, annulation, puis le didacticiel du début à la fin.
+> - J'ai vérifié l'écran d'accueil, la vue groupée, le didacticiel et la fenêtre « Justifier » sur des captures, ce qui m'a fait corriger deux détails d'affichage.
+> - Un test a révélé un vrai défaut, que j'ai corrigé : cliquer sur « Montre-moi » à une étape sans action provoquait une erreur.
+>
+> **Limite à connaître :** une session ne travaille qu'avec un seul plugin. Si l'on ouvre dans la même session un log d'un autre outil, le plugin change et les logs déjà ouverts sont relus avec ce nouveau plugin.
+>
+> L'historique de conception est complété avec cet échange : votre demande mot pour mot, le travail fait et 8 nouvelles décisions de conception. Le texte intégral de cette réponse y sera ajouté à la prochaine mise à jour, puisqu'il ne pouvait pas être enregistré avant d'être écrit.
+>
+> **À faire de votre côté :** la branche part de celle de l'historique, qui n'est pas encore fusionnée. Une seule pull request vers `develop` suffit donc pour verser les deux : https://github.com/DavidBoccara/LogWaver/compare/develop...feature/prise-en-main-regroupement
+
+---
+
+<a id="échange-6"></a>
+## Échange 6 — Publication de la version 1.1.0 (21/11, 10:27)
+
+### Demande de l'utilisateur
+
+> je ne trouve pas la bonne version sous git
+
+### Diagnostic
+
+La page d'accueil du dépôt GitHub affiche la branche `main`, restée en 1.0.0 :
+les évolutions de l'échange 5 n'existaient que sur la branche
+`feature/prise-en-main-regroupement`, aucune pull request n'ayant été fusionnée.
+
+### Choix de l'utilisateur
+
+À la question « Que voulez-vous que je fasse ? » (publier en 1.1.0, fusionner
+dans `develop` seulement, ou simplement expliquer), l'utilisateur a choisi :
+**« Publier en 1.1.0 »**.
+
+### Travail réalisé
+
+Application de la procédure de livraison du plan de gestion de configuration :
+
+1. `develop` avancée jusqu'à la branche d'évolution (avance rapide, sans
+   conflit) : elle contient l'historique de conception et l'évolution 1.1.0.
+2. Commit de version sur `develop` : `__version__ = "1.1.0"`, rubrique
+   « Non publié » du CHANGELOG renommée en `[1.1.0] - 2026-11-21`, liens de
+   comparaison mis à jour, réponse intégrale de l'échange 5 et présent échange
+   ajoutés à l'historique ; tests et contrôles de la CI rejoués.
+3. Fusion de `develop` dans `main` (commit de fusion `--no-ff`, ligne de base
+   livrée) puis report de `main` dans `develop`.
+4. Étiquette annotée `v1.1.0` posée sur `main`.
+
+La réponse de l'assistant à cet échange sera ajoutée lors de la prochaine mise
+à jour de l'historique.
 
 ---
 
