@@ -10,6 +10,20 @@ version publiée ci-dessous.
 
 ## [Non publié]
 
+## [1.2.1] - 2026-11-22
+
+### Documentation
+- **Documentation technique complète du code** en PDF
+  (`docs/LogWaver_Documentation_Code.pdf`, 84 pages) : architecture MVP,
+  mécanismes du modèle, flux principaux, interface, formats de fichiers, qualité,
+  et référence exhaustive de chaque module, classe et méthode extraite des sources.
+- **Présentation PowerPoint** de l'application (`docs/LogWaver_Presentation.pptx`,
+  12 planches).
+- Captures d'écran (`docs/images/`) et outils de régénération (`tools/doc/`).
+- La CI vérifie aussi le style des outils de documentation.
+
+Aucune modification du comportement de l'application.
+
 ## [1.2.0] - 2026-11-22
 
 ### Ajouté
@@ -95,7 +109,8 @@ version publiée ci-dessous.
 - Exports Excel (sans bibliothèque tierce) et Word.
 - Exemple complet TINTIN (plugin, index, PDF, logs des concepteurs A et B).
 
-[Non publié]: https://github.com/DavidBoccara/LogWaver/compare/v1.2.0...HEAD
+[Non publié]: https://github.com/DavidBoccara/LogWaver/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/DavidBoccara/LogWaver/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/DavidBoccara/LogWaver/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/DavidBoccara/LogWaver/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/DavidBoccara/LogWaver/releases/tag/v1.0.0

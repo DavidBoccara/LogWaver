@@ -26,6 +26,8 @@ et livré. Il s'applique à tout contributeur.
 | Données d'exemple | `samples/` | données de test |
 | Tests | `tests/` | code Python |
 | Documentation | `README.md`, `CHANGELOG.md`, `docs/` | texte |
+| Documents générés | `docs/*.pdf`, `docs/*.pptx`, `docs/images/` | binaires, régénérés par `tools/doc/` à chaque version |
+| Outils de documentation | `tools/doc/` | code (hors application) |
 | Chaîne de vérification | `.github/`, `setup.cfg`, `requirements*.txt` | configuration |
 
 Ne sont **pas** des EC et sont exclus par `.gitignore` : environnements

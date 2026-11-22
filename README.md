@@ -10,6 +10,17 @@ logs ou chez un autre concepteur.
 
 ---
 
+## Documentation
+
+| Document | Contenu |
+|---|---|
+| [`docs/LogWaver_Documentation_Code.pdf`](docs/LogWaver_Documentation_Code.pdf) | explication complète du code : architecture, flux, formats, qualité et référence de chaque module, classe et méthode (84 pages) |
+| [`docs/LogWaver_Presentation.pptx`](docs/LogWaver_Presentation.pptx) | présentation de l'application et de ses fonctionnalités (12 planches) |
+| [`docs/GESTION_DE_CONFIGURATION.md`](docs/GESTION_DE_CONFIGURATION.md) | plan de gestion de configuration |
+| [`docs/conception/HISTORIQUE_CONCEPTION.md`](docs/conception/HISTORIQUE_CONCEPTION.md) | historique complet de la conception |
+
+Ces documents se régénèrent avec les outils de [`tools/doc/`](tools/doc/README.md).
+
 ## 1. Installation
 
 Prérequis : Python 3.8 ou plus récent.

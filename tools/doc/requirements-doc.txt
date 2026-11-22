@@ -1,0 +1,4 @@
+# Outils de génération de la documentation uniquement (jamais nécessaires
+# pour exécuter LogWaver, dont les dépendances restent PyQt5, PyQtWebEngine,
+# numpy et python-docx).
+reportlab>=4.0

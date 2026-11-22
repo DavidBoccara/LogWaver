@@ -41,10 +41,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Style PEP 8
-        run: python -m pycodestyle main.py logwaver tests
+        run: python -m pycodestyle main.py logwaver tests tools
 
       - name: Analyse statique
-        run: python -m pyflakes logwaver tests
+        run: python -m pyflakes logwaver tests tools
 
       - name: Architecture MVP (le modèle n'importe pas Qt)
         shell: bash
