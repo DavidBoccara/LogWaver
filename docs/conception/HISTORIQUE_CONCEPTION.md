@@ -27,6 +27,7 @@ menée le 20 novembre 2026 avec l'assistant Claude.
 7. [Échange 7 — Où trouver la nouvelle version ?](#échange-7)
 8. [Échange 8 — Plugins par extension, assistant regex, priorités et correspondance](#échange-8)
 9. [Échange 9 — Activation de GitHub Actions](#échange-9)
+10. [Échange 10 — Documentation complète du code et présentation](#échange-10)
 5. [Registre des décisions de conception](#registre-des-décisions-de-conception)
 6. [Problèmes rencontrés et traitements](#problèmes-rencontrés-et-traitements)
 7. [Couverture des exigences](#couverture-des-exigences)
@@ -636,6 +637,74 @@ versions dans *Releases* reste déclenchée par l'envoi des étiquettes `vX.Y.Z`
 que la connexion de la session de conception ne permet pas : l'utilisateur les
 envoie depuis son poste.
 
+### Réponse de l'assistant (texte intégral)
+
+> J'ai envoyé un commit sur `develop` : comme vous venez d'activer Actions, il devrait lancer la première vérification automatique. Je n'ai pas pu en voir le résultat, car l'accès à la page *Actions* depuis ici demandait une autorisation restée sans réponse.
+>
+> **Ce que contient l'envoi.** Il complète l'historique de conception avec le texte intégral de ma réponse précédente et une entrée pour cet échange. Un workflow ne démarre qu'au prochain envoi sur le dépôt, d'où l'utilité de cet envoi maintenant.
+>
+> **À vérifier dans l'onglet *Actions*.** Vous devriez y voir une exécution **CI** sur la branche `develop`. Elle comprend 6 vérifications (Linux et Windows, chacune avec Python 3.8, 3.10 et 3.12) : style, analyse statique, contrôle de l'architecture et tests. Si l'une échoue, envoyez-moi le message d'erreur et je corrige.
+>
+> **Pour que les versions apparaissent dans *Releases*,** il reste à envoyer les étiquettes depuis votre poste, car ma connexion les refuse. Vos étiquettes `v1.0.0` et `v1.1.0` sont déjà sur GitHub, mais elles y sont arrivées avant l'activation d'Actions : il faut donc les renvoyer pour qu'elles déclenchent la publication.
+> ```bash
+> git fetch origin
+> git tag -a v1.2.0 origin/main -m "LogWaver 1.2.0"
+> git push origin v1.2.0
+> git push origin :refs/tags/v1.0.0 :refs/tags/v1.1.0
+> git push origin v1.0.0 v1.1.0
+> ```
+> Pour chaque étiquette, la CI refait toutes ses vérifications puis crée la version dans *Releases*, avec son archive et ses notes tirées du CHANGELOG.
+
+---
+
+<a id="échange-10"></a>
+## Échange 10 — Documentation complète du code et présentation (22/11, 18:23)
+
+### Demande de l'utilisateur
+
+> je veux que tu fasse un pdf complet qui explique l'integralite du code il faut que tu le mette dans le github aussi tu peux faire des planche de presentation power point pour presenter l'application en quelque planche et les differentes fonctionalitée
+
+### Travail réalisé (résumé chronologique)
+
+1. Branche `docs/documentation-code` créée depuis `develop`.
+2. **Captures d'écran** (`tools/doc/captures_ecran.py` → `docs/images/`, 10 vues) :
+   accueil, liste groupée, détails, fenêtre « Justifier », aide IA, didacticiel,
+   éditeur de plugin, assistant regex (étapes 3 et 4), règles de correspondance.
+   La revue visuelle a révélé deux défauts **du script** (pas de l'application) :
+   changement de catégorie sans clic dans la liste, et présentateur de
+   l'assistant détruit faute de référence (étape 4 vide) ; corrigés.
+3. **PDF** (`tools/doc/generer_documentation_pdf.py`, reportlab, polices DejaVu) →
+   `docs/LogWaver_Documentation_Code.pdf`, **84 pages** : sommaire et signets,
+   9 chapitres (présentation, installation, architecture avec schéma, modèle
+   métier, flux principaux en schémas, interface avec captures, formats de
+   fichiers, qualité avec l'inventaire des 64 tests) et un chapitre 9 de
+   **référence exhaustive extraite automatiquement des sources** (56 modules,
+   123 classes, 581 fonctions et méthodes : signatures et docstrings).
+   Revue page par page : en-tête erroné sur le sommaire, accents graves dans
+   certains titres, texte chevauché dans le schéma d'architecture et mention
+   tronquée en page de titre ; corrigés.
+4. **Présentation PowerPoint** (`tools/doc/generer_presentation.js`,
+   pptxgenjs, mises en page nommées, sections, notes de l'orateur) →
+   `docs/LogWaver_Presentation.pptx`, **12 planches** : titre, promesse, trois
+   gestes, regroupement, justification et priorités, suivi entre concepteurs,
+   règles de correspondance, assistant regex, aide à la décision,
+   didacticiel, architecture et qualité, démarrage. Fichier validé ; revue
+   visuelle suivie de retouches (alignements, espaces vides) et d'une
+   correction de contenu (nombre d'éléments repris de A).
+5. Intégration : `tools/doc/README.md` et `requirements-doc.txt` (outils de
+   documentation hors dépendances de l'application), `.gitattributes`
+   (`*.pptx` binaire), CI étendue au style de `tools/`, README (tableau des
+   documents), plan de gestion de configuration (documents générés comme
+   éléments de configuration), CHANGELOG.
+6. Livraison en **version 1.2.1** (correctif documentaire, sans changement de
+   comportement) sur `develop` puis `main`, pour que les documents soient
+   visibles sur la page d'accueil du dépôt.
+
+### Réponse de l'assistant
+
+Le texte intégral de la réponse sera ajouté lors de la prochaine mise à jour
+de l'historique.
+
 ---
 
 ## Registre des décisions de conception
@@ -683,6 +752,9 @@ envoie depuis son poste.
 | D39 | Règles de correspondance **enregistrées dans le projet**, défaut issu de la configuration | Chaque projet garde son niveau de tolérance | Réglage global uniquement |
 | D40 | Dialogue des règles avec **préréglages, exemple concret et aperçu gagnés/perdus** | Rendre l'option « le plus facilement compréhensible » : on voit l'effet avant de valider | Cases à cocher seules |
 | D41 | Format de fichier **v2** avec lecture des v1 → version **MINEURE** 1.2.0 | Conforme au plan de gestion de configuration (compatibilité ascendante préservée) | Version majeure |
+| D42 | Documentation PDF **générée** depuis les sources (référence extraite par `ast`) | Couvre réellement l'intégralité du code et reste fidèle à chaque version | Document rédigé à la main, vite obsolète |
+| D43 | Générateurs de documents dans `tools/doc/`, avec leurs propres prérequis | Documents reproductibles sans ajouter de dépendance à l'application | Documents livrés sans moyen de les régénérer |
+| D44 | Livraison des documents en version **1.2.1** sur `main` | Visibles sur la page d'accueil du dépôt ; correctif documentaire au sens SemVer | Rester sur `develop` (invisible par défaut, cause de la confusion de l'échange 6) |
 
 ## Problèmes rencontrés et traitements
 
