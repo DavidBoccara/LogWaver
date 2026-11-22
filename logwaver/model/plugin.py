@@ -67,6 +67,25 @@ def extract_with_pattern(pattern: Pattern[str], text: str) -> Optional[str]:
     return (match.group(value_group(pattern)) or "").strip()
 
 
+def normalize_extensions(raw: str) -> Tuple[str, ...]:
+    """Normalise une liste d'extensions de fichiers saisie par l'utilisateur.
+
+    « log, .MX ;txt » devient ``(".log", ".mx", ".txt")``.
+
+    :param raw: extensions séparées par des virgules, points-virgules ou espaces.
+    :return: extensions en minuscules, préfixées d'un point, sans doublon.
+    """
+    result: List[str] = []
+    for item in re.split(r"[,;\s]+", raw):
+        item = item.strip().lower().lstrip("*")
+        if not item:
+            continue
+        extension = item if item.startswith(".") else f".{item}"
+        if extension not in result:
+            result.append(extension)
+    return tuple(result)
+
+
 def compile_regex(pattern_text: str, context: str) -> Pattern[str]:
     """Compile une regex en produisant un message d'erreur contextualisé.
 
@@ -144,6 +163,8 @@ class PluginDefinition:
     :param pdf_documentation: chemin du PDF de documentation (optionnel).
     :param pdf_page_index: chemin du fichier d'index des pages (optionnel).
     :param source_path: fichier d'origine (pour résoudre les chemins).
+    :param file_extensions: extensions des logs produits par l'outil
+        (ex. ``.log``, ``.mx``) : elles désignent ce plugin automatiquement.
     """
 
     tool_name: str
@@ -151,6 +172,15 @@ class PluginDefinition:
     pdf_documentation: str = ""
     pdf_page_index: str = ""
     source_path: Optional[Path] = field(default=None, compare=False)
+    file_extensions: Tuple[str, ...] = ()
+
+    def handles_extension(self, path: Path) -> bool:
+        """Indique si l'extension d'un fichier est déclarée par ce plugin.
+
+        :param path: fichier de log.
+        :return: ``True`` si l'extension est déclarée.
+        """
+        return path.suffix.lower() in self.file_extensions
 
     @property
     def type_names(self) -> Tuple[str, ...]:
@@ -275,6 +305,8 @@ class PluginLoader:
                 PLUGIN_SECTION, "pdf_page_index", fallback=""
             ).strip(),
             source_path=source_path,
+            file_extensions=normalize_extensions(
+                parser.get(PLUGIN_SECTION, "file_extensions", fallback="")),
         )
 
     @staticmethod
@@ -340,6 +372,7 @@ class PluginWriter:
         lines: List[str] = [self.HEADER, f"[{PLUGIN_SECTION}]"]
         lines.append(f"tool_name = {definition.tool_name}")
         lines.append(f"element_types = {', '.join(definition.type_names)}")
+        lines.append(f"file_extensions = {', '.join(definition.file_extensions)}")
         lines.append(f"pdf_documentation = {definition.pdf_documentation}")
         lines.append(f"pdf_page_index = {definition.pdf_page_index}")
         for element in definition.element_types:

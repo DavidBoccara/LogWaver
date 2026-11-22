@@ -16,7 +16,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from logwaver import __version__
 from logwaver.constants import (
@@ -42,6 +42,8 @@ class ProjectData:
     :param user_name: nom du dernier utilisateur ayant justifié.
     :param matching_keys: clés d'empreinte utilisées lors de l'enregistrement.
     :param justifications: règles de justification.
+    :param matching: règles de correspondance du projet (vide = celles de la
+        configuration ; cas des fichiers en version 1).
     """
 
     plugin_path: str = ""
@@ -49,6 +51,7 @@ class ProjectData:
     user_name: str = ""
     matching_keys: Tuple[str, ...] = ()
     justifications: List[Justification] = field(default_factory=list)
+    matching: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -58,11 +61,13 @@ class RulesData:
     :param tool_name: outil d'origine des règles (informatif).
     :param matching_keys: clés d'empreinte utilisées à la création.
     :param justifications: règles exportées.
+    :param matching: règles de correspondance de l'émetteur (informatif).
     """
 
     tool_name: str
     matching_keys: Tuple[str, ...]
     justifications: Tuple[Justification, ...]
+    matching: Dict[str, Any] = field(default_factory=dict)
 
 
 class ProjectStore:
@@ -85,6 +90,7 @@ class ProjectStore:
             "log_paths": [self._to_relative(p, base) for p in data.log_paths],
             "user_name": data.user_name,
             "matching_keys": list(data.matching_keys),
+            "matching": dict(data.matching),
             "justifications": [j.to_dict() for j in data.justifications],
         }
         self._write_json(document, path)
@@ -113,6 +119,7 @@ class ProjectStore:
                 user_name=str(document.get("user_name", "")),
                 matching_keys=tuple(document.get("matching_keys", [])),
                 justifications=self._parse_justifications(document),
+                matching=self._parse_matching(document),
             )
         except (TypeError, ValueError) as error:
             raise ProjectFileError(
@@ -133,6 +140,7 @@ class ProjectStore:
             "application_version": __version__,
             "tool_name": data.tool_name,
             "matching_keys": list(data.matching_keys),
+            "matching": dict(data.matching),
             "justifications": [j.to_dict() for j in data.justifications],
         }
         self._write_json(document, path)
@@ -156,6 +164,7 @@ class ProjectStore:
             tool_name=str(document.get("tool_name", "")),
             matching_keys=tuple(document.get("matching_keys", [])),
             justifications=tuple(self._parse_justifications(document)),
+            matching=self._parse_matching(document),
         )
 
     # -------------------------------------------------------------- interne
@@ -173,6 +182,16 @@ class ProjectStore:
             except (KeyError, TypeError, AttributeError) as error:
                 LOGGER.warning("Justification ignorée (invalide) : %s", error)
         return result
+
+    @staticmethod
+    def _parse_matching(document: Dict[str, Any]) -> Dict[str, Any]:
+        """Lit les règles de correspondance (absentes des fichiers en version 1).
+
+        :param document: document lu.
+        :return: règles brutes (vide si absentes ou invalides).
+        """
+        matching = document.get("matching", {})
+        return dict(matching) if isinstance(matching, dict) else {}
 
     @staticmethod
     def _check_format(document: Dict[str, Any], expected: str,
@@ -259,22 +278,3 @@ class ProjectStore:
         if not path.is_absolute():
             path = base / path
         return str(path.resolve())
-
-
-def describe_rules_compatibility(
-    rules_keys: Tuple[str, ...], current_keys: Tuple[str, ...]
-) -> Optional[str]:
-    """Explique une éventuelle incompatibilité de clés d'empreinte.
-
-    :param rules_keys: clés utilisées pour créer les règles.
-    :param current_keys: clés de la configuration courante.
-    :return: message d'avertissement, ou ``None`` si compatible.
-    """
-    if not rules_keys or tuple(rules_keys) == tuple(current_keys):
-        return None
-    return (
-        "Les justifications ont été créées avec les clés de correspondance "
-        f"« {', '.join(rules_keys)} » alors que la configuration actuelle "
-        f"utilise « {', '.join(current_keys)} ». Certaines justifications "
-        "pourraient ne pas être retrouvées."
-    )

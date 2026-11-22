@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import itertools
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -20,12 +20,13 @@ from logwaver.constants import (
     MATCH_KEY_CODE,
     MATCH_KEY_DESCRIPTION,
     MATCH_KEY_FILE_NAME,
-    MATCH_KEY_TOOL,
+    MATCH_KEY_FILE_PATH,
+    MATCH_KEY_LINE,
     MATCH_KEY_TYPE,
     SOURCE_IMPORTED,
     SOURCE_MANUAL,
 )
-from logwaver.model.app_config import AppConfig
+from logwaver.model.app_config import AppConfig, MatchingOptions
 from logwaver.model.entities import Justification, LogEntry
 from logwaver.model.entry_filter import EntryFilter, FilterCriteria
 from logwaver.model.events import (
@@ -44,16 +45,12 @@ from logwaver.model.exporters.report_data import (
     RuleReportRow,
 )
 from logwaver.model.fingerprint import FingerprintBuilder
+from logwaver.model.justification_index import JustificationIndex
 from logwaver.model.justification_repository import JustificationRepository
 from logwaver.model.log_parser import LogParser
 from logwaver.model.pdf_index import DocumentationLocator, PdfLocation
 from logwaver.model.plugin import PluginDefinition, PluginLoader
-from logwaver.model.project_store import (
-    ProjectData,
-    ProjectStore,
-    RulesData,
-    describe_rules_compatibility,
-)
+from logwaver.model.project_store import ProjectData, ProjectStore, RulesData
 from logwaver.model.statistics import StatisticsCalculator, SummaryTable
 from logwaver.model.undo import ChangeJustificationsCommand, UndoStack
 
@@ -77,18 +74,43 @@ class LogLoadReport:
 
 @dataclass(frozen=True)
 class ImportReport:
-    """Résultat d'un import de justifications.
+    """Résultat d'un import de justifications (résolution par priorité).
 
-    :param imported: règles ajoutées ou remplacées.
-    :param skipped: règles ignorées (déjà présentes, sans écrasement).
-    :param matched_entries: éléments du log courant justifiés par l'import.
+    :param added: justifications nouvelles (élément encore non justifié).
+    :param replaced: justifications existantes remplacées par une catégorie
+        plus prioritaire (ex. « Rejeté » remplace « Justifié »).
+    :param kept: justifications importées écartées car la justification
+        existante est de priorité supérieure ou égale.
+    :param matched_entries: éléments des logs ouverts concernés par l'import.
     :param warning: avertissement de compatibilité éventuel.
     """
 
-    imported: int
-    skipped: int
+    added: int
+    replaced: int
+    kept: int
     matched_entries: int
     warning: Optional[str]
+
+    @property
+    def imported(self) -> int:
+        """Retourne le nombre de justifications effectivement appliquées."""
+        return self.added + self.replaced
+
+
+@dataclass(frozen=True)
+class MatchingPreview:
+    """Effet d'un changement de règles de correspondance sur les logs ouverts.
+
+    :param justified_before: éléments justifiés avec les règles actuelles.
+    :param justified_after: éléments justifiés avec les nouvelles règles.
+    :param gained: éléments qui retrouveraient une justification, avec elle.
+    :param lost: éléments qui perdraient leur justification.
+    """
+
+    justified_before: int
+    justified_after: int
+    gained: Tuple[Tuple[LogEntry, Justification], ...]
+    lost: Tuple[LogEntry, ...]
 
 
 @dataclass(frozen=True)
@@ -114,7 +136,9 @@ class WaverSession:
         self._config: AppConfig = config
         self._events: EventHub = EventHub()
         self._fingerprints = FingerprintBuilder(config.matching)
+        self._strict_fingerprints = FingerprintBuilder.strict()
         self._repository = JustificationRepository()
+        self._index = JustificationIndex(self._fingerprints, config.status_priority)
         self._undo_stack = UndoStack()
         self._undo_stack.add_listener(self._on_history_changed)
         self._id_counter = itertools.count(1)
@@ -191,8 +215,24 @@ class WaverSession:
 
     @property
     def justifications(self) -> List[Justification]:
-        """Retourne toutes les règles de justification."""
+        """Retourne toutes les justifications stockées."""
         return self._repository.all()
+
+    @property
+    def matching_options(self) -> MatchingOptions:
+        """Retourne les règles de correspondance du projet."""
+        return self._fingerprints.options
+
+    def comparable_values(self, entry: LogEntry,
+                          options: Optional[MatchingOptions] = None) -> Dict[str, str]:
+        """Montre les valeurs d'un élément telles qu'elles sont comparées.
+
+        :param entry: élément concerné.
+        :param options: règles à appliquer (``None`` = règles courantes).
+        :return: attribut → valeur comparée (ex. description avec ‹…›).
+        """
+        builder = FingerprintBuilder(options) if options else self._fingerprints
+        return builder.comparable_values(self._context_of(entry))
 
     def entry_by_id(self, entry_id: int) -> Optional[LogEntry]:
         """Retourne un élément par identifiant.
@@ -217,7 +257,7 @@ class WaverSession:
         :param entry: élément concerné.
         :return: justification, ou ``None`` s'il n'est pas classé.
         """
-        return self._repository.get(entry.fingerprint)
+        return self._index.best(entry.fingerprint)
 
     def entries_with_same_code(self, entry: LogEntry) -> List[LogEntry]:
         """Retourne les éléments du même outil, type et code.
@@ -306,7 +346,7 @@ class WaverSession:
             path=resolved,
             entry_count=len(new_entries),
             auto_justified_count=sum(
-                1 for e in new_entries if e.fingerprint in self._repository
+                1 for e in new_entries if self._index.best(e.fingerprint) is not None
             ),
         )
         LOGGER.info("Log %s : %d éléments, %d justifiés automatiquement.",
@@ -348,26 +388,36 @@ class WaverSession:
             raise LogWaverError(f"Catégorie inconnue : {status_id}")
         if not text.strip():
             raise LogWaverError("La justification ne peut pas être vide.")
+        entries = self.entries_by_ids(entry_ids)
+        if not entries:
+            return 0
         timestamp = Justification.now_iso()
-        changes: Dict[str, Optional[Justification]] = {}
-        for entry in self.entries_by_ids(entry_ids):
-            changes[entry.fingerprint] = Justification(
-                fingerprint=entry.fingerprint,
+        # 1. Les justifications qui s'appliquaient à ces éléments sont remplacées...
+        changes: Dict[str, Optional[Justification]] = {
+            rule_id: None
+            for entry in entries for rule_id in self._index.rule_ids(entry.fingerprint)
+        }
+        # 2. ...par une justification par élément distinct (identifiant strict).
+        created: Dict[str, Justification] = {}
+        for entry in entries:
+            context = self._context_of(entry)
+            rule_id = self._strict_fingerprints.build_from_context(context)
+            created[rule_id] = Justification(
+                fingerprint=rule_id,
                 status_id=status_id,
                 text=text.strip(),
                 author=self._user_name,
                 timestamp=timestamp,
                 source=source,
-                context=self._context_of(entry),
+                context=context,
             )
-        if not changes:
-            return 0
+        changes.update(created)
         label = self._config.status_label(status_id)
         self._undo_stack.push(ChangeJustificationsCommand(
             self._repository, changes,
-            f"Classer {len(changes)} élément(s) en « {label} »",
+            f"Classer {len(entries)} élément(s) en « {label} »",
         ))
-        return len(changes)
+        return len(created)
 
     def unclassify(self, entry_ids: Sequence[int]) -> int:
         """Retire la justification d'éléments (retour en « non justifiés »).
@@ -376,9 +426,9 @@ class WaverSession:
         :return: nombre d'empreintes libérées.
         """
         changes: Dict[str, Optional[Justification]] = {
-            entry.fingerprint: None
+            rule_id: None
             for entry in self.entries_by_ids(entry_ids)
-            if entry.fingerprint in self._repository
+            for rule_id in self._index.rule_ids(entry.fingerprint)
         }
         if not changes:
             return 0
@@ -403,37 +453,49 @@ class WaverSession:
         return self._undo_stack.redo()
 
     # ===================================================== import / export
-    def import_rules(self, path: Path, overwrite: bool) -> ImportReport:
-        """Importe les justifications d'un autre concepteur.
+    def import_rules(self, path: Path) -> ImportReport:
+        """Importe les justifications d'un collègue (fichier ``.lwj`` ou projet ``.lwp``).
+
+        Conflits résolus par priorité : pour un même élément, la justification
+        dont la catégorie a la priorité la plus élevée l'emporte (ex. « Rejeté »
+        remplace « Justifié ») ; à priorité égale, la justification déjà
+        présente est conservée. L'import est annulable (Ctrl+Z).
 
         :param path: fichier ``.lwj`` ou ``.lwp``.
-        :param overwrite: remplace les justifications déjà présentes.
         :return: rapport d'import.
         :raises ProjectFileError: si le fichier est invalide.
         """
         rules = self._store.load_rules(path)
         changes: Dict[str, Optional[Justification]] = {}
-        skipped = 0
+        retained: Dict[str, Justification] = {}  # clé -> gagnant après import
+        added = replaced = kept = 0
         for rule in rules.justifications:
-            if rule.fingerprint in self._repository and not overwrite:
-                skipped += 1
-                continue
             source = rule.source if rule.source != SOURCE_MANUAL else SOURCE_IMPORTED
-            changes[rule.fingerprint] = rule.with_source(source)
+            incoming = rule.with_source(source)
+            key = self._index.key_of(incoming)
+            current = retained.get(key) or self._index.best(key)
+            if current is None:
+                added += 1
+            elif self._config.status_priority(incoming.status_id) > \
+                    self._config.status_priority(current.status_id):
+                replaced += 1
+                for rule_id in self._index.rule_ids(key):
+                    changes.setdefault(rule_id, None)
+                if current.fingerprint in changes:
+                    changes[current.fingerprint] = None
+            else:
+                kept += 1
+                continue
+            changes[incoming.fingerprint] = incoming
+            retained[key] = incoming
         if changes:
             self._undo_stack.push(ChangeJustificationsCommand(
                 self._repository, changes,
-                f"Importer {len(changes)} justification(s)",
+                f"Importer {added + replaced} justification(s)",
             ))
-        matched = sum(1 for e in self._entries if e.fingerprint in changes)
-        return ImportReport(
-            imported=len(changes),
-            skipped=skipped,
-            matched_entries=matched,
-            warning=describe_rules_compatibility(
-                rules.matching_keys, self._fingerprints.keys
-            ),
-        )
+        matched = sum(1 for e in self._entries if e.fingerprint in retained)
+        return ImportReport(added, replaced, kept, matched,
+                            self._context_warning(rules.justifications))
 
     def export_rules(self, path: Path) -> int:
         """Exporte toutes les justifications (fichier de transmission).
@@ -448,6 +510,7 @@ class WaverSession:
                 tool_name=self._plugin.tool_name if self._plugin else "",
                 matching_keys=self._fingerprints.keys,
                 justifications=justifications,
+                matching=self._fingerprints.options.to_dict(),
             ),
             path,
         )
@@ -479,8 +542,10 @@ class WaverSession:
         occurrences: Dict[str, int] = {}
         entry_rows: List[EntryReportRow] = []
         for entry in self._entries:
-            occurrences[entry.fingerprint] = occurrences.get(entry.fingerprint, 0) + 1
             justification = self.justification_of(entry)
+            if justification is not None:
+                occurrences[justification.fingerprint] = (
+                    occurrences.get(justification.fingerprint, 0) + 1)
             entry_rows.append(EntryReportRow(
                 entry_id=entry.entry_id,
                 entry_type=entry.entry_type,
@@ -532,6 +597,7 @@ class WaverSession:
         self._entries_by_id.clear()
         self._log_paths.clear()
         self._repository.replace_all([])
+        self._set_builder(self._config.matching)
         self._project_path = None
         self._undo_stack.clear()
         self._metadata_dirty = False
@@ -556,6 +622,7 @@ class WaverSession:
                 user_name=self._user_name,
                 matching_keys=self._fingerprints.keys,
                 justifications=self._repository.all(),
+                matching=self._fingerprints.options.to_dict(),
             ),
             target,
         )
@@ -581,6 +648,8 @@ class WaverSession:
         self._entries_by_id.clear()
         self._log_paths.clear()
         self._repository.replace_all(data.justifications)
+        self._set_builder(MatchingOptions.from_dict(data.matching, self._config.matching)
+                          if data.matching else self._config.matching)
         self._user_name = data.user_name
         if data.plugin_path:
             if Path(data.plugin_path).is_file():
@@ -597,11 +666,53 @@ class WaverSession:
         self._undo_stack.clear()
         self._metadata_dirty = False
         self._publish_all()
-        warning = describe_rules_compatibility(data.matching_keys,
-                                               self._fingerprints.keys)
+        warning = self._context_warning(data.justifications)
         if warning:
             LOGGER.warning(warning)
         return ProjectOpenReport(tuple(missing), tuple(reports))
+
+    # ============================================== règles de correspondance
+    def set_matching_options(self, options: MatchingOptions) -> None:
+        """Change les règles de correspondance et réapplique les justifications.
+
+        Aucune justification n'est supprimée : seules les associations
+        élément ↔ justification sont recalculées, si bien que revenir aux
+        règles précédentes restaure exactement l'état antérieur.
+
+        :param options: nouvelles règles.
+        :raises LogWaverError: si aucun attribut n'est comparé.
+        """
+        if not options.keys:
+            raise LogWaverError("Cochez au moins un critère de comparaison.")
+        if options == self._fingerprints.options:
+            return
+        self._set_builder(options)
+        self._metadata_dirty = True
+        LOGGER.info("Règles de correspondance : %s", options)
+        self._publish_all()
+
+    def preview_matching(self, options: MatchingOptions) -> MatchingPreview:
+        """Calcule l'effet de nouvelles règles sans rien modifier.
+
+        :param options: règles envisagées.
+        :return: éléments gagnés et perdus.
+        """
+        builder = FingerprintBuilder(options)
+        index = JustificationIndex(builder, self._config.status_priority)
+        index.rebuild(self._repository.all())
+        gained: List[Tuple[LogEntry, Justification]] = []
+        lost: List[LogEntry] = []
+        before = after = 0
+        for entry in self._entries:
+            current = self.justification_of(entry)
+            future = index.best(builder.build_from_context(self._context_of(entry)))
+            before += current is not None
+            after += future is not None
+            if future is not None and current is None:
+                gained.append((entry, future))
+            elif future is None and current is not None:
+                lost.append(entry)
+        return MatchingPreview(before, after, tuple(gained), tuple(lost))
 
     # ======================================================== documentation
     @property
@@ -658,6 +769,38 @@ class WaverSession:
         """
         return LogParser(plugin, self._fingerprints, self._id_counter)
 
+    def _set_builder(self, options: MatchingOptions) -> None:
+        """Installe de nouvelles règles : empreintes des éléments et index recalculés.
+
+        :param options: règles de correspondance.
+        """
+        self._fingerprints = FingerprintBuilder(options)
+        self._index = JustificationIndex(self._fingerprints, self._config.status_priority)
+        rebuilt = [replace(e, fingerprint=self._fingerprints.build(
+            e.tool_name, e.entry_type, e.fields)) for e in self._entries]
+        self._entries = rebuilt
+        self._entries_by_id = {e.entry_id: e for e in rebuilt}
+        self._index.rebuild(self._repository.all())
+
+    def _context_warning(self, justifications: Iterable[Justification]) -> Optional[str]:
+        """Signale les justifications anciennes ne permettant pas les règles actuelles.
+
+        :param justifications: justifications à contrôler.
+        :return: avertissement, ou ``None``.
+        """
+        needed = [key for key in (MATCH_KEY_FILE_PATH, MATCH_KEY_LINE)
+                  if key in self._fingerprints.keys]
+        if not needed:
+            return None
+        incomplete = sum(1 for j in justifications
+                         if j.context and any(key not in j.context for key in needed))
+        if not incomplete:
+            return None
+        return (f"{incomplete} justification(s) proviennent d'une ancienne version et ne "
+                "connaissent pas le chemin complet ou le numéro de ligne : elles ne "
+                "seront retrouvées que si ces critères sont décochés "
+                "(Édition > Règles de correspondance).")
+
     def _remove_entries_of(self, log_path: str) -> None:
         """Retire de la session les éléments issus d'un log.
 
@@ -683,21 +826,16 @@ class WaverSession:
                 LOGGER.error("Ré-analyse impossible de %s : %s", path, error)
 
     def _context_of(self, entry: LogEntry) -> Dict[str, str]:
-        """Construit le contexte descriptif stocké avec une justification.
+        """Construit le contexte mémorisé avec une justification.
 
         :param entry: élément justifié.
-        :return: attributs descriptifs.
+        :return: valeurs brutes de tous les attributs comparables.
         """
-        described = self._fingerprints.describe(
-            entry.tool_name, entry.entry_type, entry.fields
-        )
-        return {key: described[key] for key in (
-            MATCH_KEY_TOOL, MATCH_KEY_TYPE, MATCH_KEY_CODE,
-            MATCH_KEY_DESCRIPTION, MATCH_KEY_FILE_NAME,
-        )}
+        return FingerprintBuilder.raw_context(entry.tool_name, entry.entry_type, entry.fields)
 
     def _on_history_changed(self) -> None:
-        """Relaie les changements de l'historique aux observateurs."""
+        """Recalcule l'index puis relaie les changements aux observateurs."""
+        self._index.rebuild(self._repository.all())
         self._events.publish(EVENT_JUSTIFICATIONS_CHANGED)
         self._events.publish(EVENT_HISTORY_CHANGED)
         self._events.publish(EVENT_PROJECT_CHANGED)

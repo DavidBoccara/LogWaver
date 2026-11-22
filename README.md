@@ -98,10 +98,47 @@ Concepteur A : **Fichier > Partager mes justifications…** (fichier `.lwj`).
 Concepteur B : **Fichier > Récupérer les justifications d'un collègue…** : seuls
 les éléments vraiment nouveaux restent à traiter. Essai avec l'exemple :
 `samples/tintin_designer_a.log` puis `samples/tintin_designer_b.log`.
+L'import accepte aussi un **fichier projet** (`.lwp`) complet.
+
+**Priorités.** Si une justification importée et une justification existante
+portent sur le même élément, la catégorie de **priorité la plus élevée
+l'emporte** : un élément « Rejeté » chez un collègue remplace votre « Justifié ».
+À priorité égale, votre justification est conservée. Les priorités se règlent
+dans `config/app_config.ini` (`priority` de chaque catégorie, visible en
+infobulle sur les catégories) ; le bilan de l'import détaille les justifications
+ajoutées, remplacées et écartées, et Ctrl+Z annule l'import.
+
+| Catégorie | Priorité (exemple fourni) |
+|---|---|
+| Rejeté | 50 |
+| En cours d'analyse | 40 |
+| À traiter | 30 |
+| Justifié / Accepté | 20 |
+| Clôturé | 10 |
+
+### 3.5 Retrouver une justification malgré les différences
+
+**Édition > Règles de correspondance** (Ctrl+M) indique ce qui doit être
+identique pour qu'une justification existante s'applique à un élément d'un
+nouveau log :
+
+* **choix rapide** : Strict, Recommandé (par défaut), Tolérant, Par code seulement ;
+* **critères** à cocher (outil, type, code, description, nom du fichier, chemin,
+  numéro de ligne), chacun illustré par la valeur de l'élément sélectionné et
+  par la conséquence de le décocher ;
+* **tolérances sur la description** : ignorer le texte entre guillemets, les noms
+  de fichiers et chemins, les nombres, la casse. Exemple : « le fichier
+  ‹…› est introuvable » rapproche *dada.txt* et *theme.qss* ;
+* **aperçu immédiat** : nombre d'éléments justifiés avant → après, liste des
+  éléments qui retrouveraient une justification (et laquelle) ou en perdraient.
+
+Les règles sont enregistrées dans le projet. Elles ne suppriment jamais de
+justification : revenir au réglage précédent restaure exactement l'état
+antérieur.
 
 Raccourcis : F1 documentation PDF à la page du code, Ctrl+G fichier source à la
-ligne, Ctrl+I aide IA, Ctrl+F rechercher, Ctrl+R éditeur de plugin, Maj+F1
-didacticiel.
+ligne, Ctrl+I aide IA, Ctrl+F rechercher, Ctrl+M règles de correspondance,
+Ctrl+R modifier le plugin, Ctrl+Maj+N nouveau plugin, Maj+F1 didacticiel.
 
 ## 4. Fichiers manipulés
 
@@ -110,7 +147,7 @@ didacticiel.
 | `config/app_config.ini` | INI | catégories, règles de correspondance, éditeur externe, langue IA |
 | `plugins/<outil>.ini` | INI | description d'un format de log (regex) |
 | `plugins/<outil>_pdf_index.ini` | INI | code → page de la documentation PDF |
-| `*.lwp` | JSON | **projet** : plugin, logs, utilisateur, justifications |
+| `*.lwp` | JSON | **projet** : plugin, logs, utilisateur, justifications, règles de correspondance (format v2 ; les projets v1 restent lisibles) |
 | `*.lwj` | JSON | **justifications seules**, à transmettre à un autre concepteur |
 | `*.xlsx` / `*.docx` | Office | exports (synthèse, éléments, justifications) |
 
@@ -120,6 +157,7 @@ didacticiel.
 [plugin]
 tool_name = TINTIN
 element_types = Note, Warning, Error
+file_extensions = .log, .tlog
 pdf_documentation = tintin_manual.pdf
 pdf_page_index = tintin_pdf_index.ini
 
@@ -133,6 +171,13 @@ regex.description = \s-\s(?P<value>.*)$
 ```
 
 * `element_types` : types recherchés ; leur ordre fixe la priorité de détection.
+* `file_extensions` : extensions des logs de l'outil. Un fichier portant l'une
+  d'elles est associé automatiquement à ce plugin (sauf si un autre plugin
+  reconnaît clairement son contenu alors que celui-ci n'y reconnaît rien).
+  Sans extension déclarée, le plugin est choisi d'après le contenu du log ; si
+  rien ne convient, l'outil demande quel plugin utiliser et propose de
+  **mémoriser l'extension** dans le plugin (seule la ligne `file_extensions` est
+  modifiée, les commentaires sont conservés).
 * `pdf_documentation` / `pdf_page_index` : optionnels, chemins relatifs au plugin.
 * `detect` : regex identifiant une ligne du type ; `fields` : champs à extraire.
 
@@ -144,21 +189,36 @@ IA et le classement par code. Des champs supplémentaires peuvent être déclar�
 > Les commentaires INI ne sont reconnus qu'en **début de ligne** (`#` ou `;`) :
 > un `#` ou `;` placé après une valeur fait partie de la regex.
 
-### 4.2 Éditeur de plugin et testeur de regex (Outils > Éditeur…)
+### 4.2 Créer ou modifier un plugin (menu Outils)
 
-* coloration en direct des valeurs extraites sur un log d'exemple ;
-* **génération automatique** : sélectionnez à la souris la valeur de chaque champ
-  dans une ligne d'exemple, « Marquer la sélection », puis « Générer les regex ».
-  Les regex produites sont vérifiées sur la ligne avant d'être proposées ;
-* validation et enregistrement, avec rechargement proposé dans la session.
+* **Outils > Créer un nouveau plugin** part d'un plugin vierge, même si d'autres
+  plugins existent ; **Modifier le plugin actuel** ouvre celui en cours. Un
+  nouveau plugin est proposé à l'enregistrement dans `plugins/`, où il est
+  détecté automatiquement. Le champ « Extensions des logs » se remplit tout seul
+  avec l'extension du log d'exemple chargé.
+* **Assistant regex pas à pas** (aucune regex à écrire) :
+  1. choisir le **type** (ex. Warning), existant ou nouveau ;
+  2. cliquer sur une **ligne d'exemple** où l'élément apparaît en entier ;
+  3. surligner les **éléments à extraire** (chemin, ligne, code, description,
+     ou tout autre champ) et les **parties variables sans intérêt** (date,
+     heure…) — le bouton « Proposer automatiquement » repère dates et nombres.
+     **Tout le reste est considéré comme invariant** et sert seul de repère :
+     chaque élément sélectionné peut prendre n'importe quelle valeur. Le modèle
+     de ligne obtenu s'affiche, ex. `[‹…›] WARNING ‹Code› ‹Fichier›:‹Ligne› - ‹Description›` ;
+  4. **vérifier** : les regex sont appliquées à tout l'exemple, avec le nombre de
+     lignes reconnues et les valeurs extraites de chacune.
+* testeur de regex en direct, validation et enregistrement, avec rechargement
+  proposé dans la session.
 
-### 4.3 Correspondance des justifications (`[matching]` de la configuration)
+### 4.3 Correspondance des justifications
 
-Une justification est liée à une **empreinte** calculée à partir des attributs
-listés dans `keys` (par défaut : outil, type, code, description, nom court du
-fichier). Le numéro de ligne et le répertoire sont exclus par défaut : la
-justification survit donc aux modifications du code et à son déplacement chez un
-autre concepteur. Ajoutez `line` ou `file_path` pour un appariement plus strict.
+Chaque justification mémorise le contexte complet de l'élément justifié (outil,
+type, code, description, fichier, chemin, ligne). Pour un nouvel élément, une
+**empreinte de comparaison** est calculée selon les règles de correspondance du
+projet (§ 3.5) ; si plusieurs justifications correspondent, la plus
+prioritaire l'emporte, puis la plus récente. Les règles par défaut d'un nouveau
+projet sont celles de la section `[matching]` de `config/app_config.ini`
+(`keys`, `mask_numbers`, `mask_quoted`, `mask_paths`, `ignore_case`).
 
 ## 5. Aide IA
 
@@ -205,7 +265,7 @@ log_waver/
 ├── resources/styles/main.qss      # tout le style visuel (séparé du code)
 ├── resources/tutorial/            # contenu du didacticiel (INI éditable)
 ├── samples/                       # logs des concepteurs A et B + sources
-├── tests/                         # unittest (43 tests, dont 3 tests d'IHM)
+├── tests/                         # unittest (64 tests, dont 5 tests d'IHM)
 └── logwaver/
     ├── constants.py               # constantes UPPER_CASE centralisées
     ├── logging_setup.py           # journal console + fichier tournant
@@ -227,7 +287,9 @@ log_waver/
     │   ├── source_files.py        # lecture source, éditeur externe
     │   ├── preferences.py         # dernier utilisateur, didacticiel proposé
     │   ├── grouping.py            # regroupement par code, fichier, champ…
-    │   ├── plugin_detector.py     # détection automatique du plugin
+    │   ├── plugin_detector.py     # choix du plugin (extension, contenu) + mémorisation
+    │   ├── justification_index.py # correspondance et priorités des justifications
+    │   ├── matching_presets.py    # préréglages Strict / Recommandé / Tolérant…
     │   ├── tutorial.py            # lecture et progression du didacticiel
     │   ├── events.py              # patron Observateur
     │   ├── app_config.py / exceptions.py
@@ -237,6 +299,8 @@ log_waver/
     │   ├── ai_assistant_presenter.py
     │   ├── plugin_editor_presenter.py
     │   ├── tutorial_presenter.py
+    │   ├── regex_wizard_presenter.py
+    │   ├── matching_rules_presenter.py
     │   └── error_handling.py      # décorateur @guarded (try/except + logs)
     └── view/                      # VUES : widgets passifs, signaux uniquement
         ├── main_window.py
@@ -245,6 +309,7 @@ log_waver/
         ├── widgets/               # entry_tree, filter_bar, category_panel,
         │                          # details_panel, welcome_page, tutorial_panel
         └── dialogs/               # justification, aide IA, éditeur de plugin,
+                                   # assistant regex, règles de correspondance,
                                    # visionneuse source, visionneuse PDF
 ```
 
@@ -270,10 +335,12 @@ Principes appliqués :
   nécessite un pilote OpenGL fonctionnel. Sous Linux, en tant que root, exportez
   `QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox`. Si PyQtWebEngine est absent, le PDF
   est ouvert par l'application système et la page à consulter est indiquée.
-* **Aucun élément reconnu** : ouvrez l'éditeur de plugin, collez quelques lignes
+* **Aucun élément reconnu** : Outils > Modifier le plugin actuel, collez quelques lignes
   du log et vérifiez la regex de détection.
-* **Justifications non retrouvées après import** : un avertissement s'affiche si
-  les clés `[matching]` diffèrent entre les deux concepteurs ; alignez-les.
+* **Justifications non retrouvées après import ou sur un nouveau log** : ouvrez
+  Édition > Règles de correspondance (Ctrl+M) et décochez ce qui change d'un log
+  à l'autre ; l'aperçu indique combien d'éléments retrouveraient leur
+  justification.
 
 ## 8. Gestion de configuration
 

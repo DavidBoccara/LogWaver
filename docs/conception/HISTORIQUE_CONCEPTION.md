@@ -24,6 +24,8 @@ menée le 20 novembre 2026 avec l'assistant Claude.
 4. [Échange 4 — Traçabilité de la conception](#échange-4)
 5. [Échange 5 — Simplification, didacticiel et regroupement](#échange-5)
 6. [Échange 6 — Publication de la version 1.1.0](#échange-6)
+7. [Échange 7 — Où trouver la nouvelle version ?](#échange-7)
+8. [Échange 8 — Plugins par extension, assistant regex, priorités et correspondance](#échange-8)
 5. [Registre des décisions de conception](#registre-des-décisions-de-conception)
 6. [Problèmes rencontrés et traitements](#problèmes-rencontrés-et-traitements)
 7. [Couverture des exigences](#couverture-des-exigences)
@@ -434,8 +436,141 @@ Application de la procédure de livraison du plan de gestion de configuration :
    livrée) puis report de `main` dans `develop`.
 4. Étiquette annotée `v1.1.0` posée sur `main`.
 
-La réponse de l'assistant à cet échange sera ajoutée lors de la prochaine mise
-à jour de l'historique.
+### Réponse de l'assistant (texte intégral)
+
+> La version 1.1.0 est maintenant sur `main`. Vous la voyez directement sur la page d'accueil du dépôt : https://github.com/DavidBoccara/LogWaver
+>
+> **Pourquoi vous ne la trouviez pas :** GitHub affiche la branche `main` par défaut, et elle était restée en 1.0.0. Les nouveautés (regroupement, didacticiel, prise en main simplifiée) n'étaient que sur la branche `feature/prise-en-main-regroupement`, en attente d'une pull request que personne n'avait fusionnée.
+>
+> **Ce que j'ai fait, selon la procédure de livraison du plan :**
+> - `develop` contient maintenant l'historique de conception et les nouveautés.
+> - J'ai ajouté un commit de version : la version passe à 1.1.0 et le CHANGELOG a une entrée `[1.1.0] - 2026-11-21`.
+> - J'ai fusionné `develop` dans `main` avec un commit de fusion, qui marque la version livrée. `main` et `develop` sont identiques.
+> - Les 43 tests et tous les contrôles de la CI passent sur cette version.
+> - L'historique de conception contient maintenant ma réponse précédente en entier, ainsi que cet échange (votre question, le diagnostic et votre choix).
+>
+> **Ce qui n'a pas marché : l'étiquette `v1.1.0` n'est pas sur GitHub.** La connexion de cette session refuse les envois d'étiquettes, comme pour la 1.0.0. Pour poser les deux étiquettes, depuis votre copie du dépôt :
+> ```bash
+> git fetch origin
+> git tag -a v1.0.0 a5df6b0 -m "LogWaver 1.0.0"
+> git tag -a v1.1.0 origin/main -m "LogWaver 1.1.0"
+> git push origin v1.0.0 v1.1.0
+> ```
+> Cet envoi déclenche la CI. Une fois ses vérifications passées, elle crée automatiquement les deux versions dans l'onglet *Releases*, avec leurs archives.
+>
+> Les branches `docs/historique-conception` et `feature/prise-en-main-regroupement` ne servent plus, puisque leur contenu est dans `main`. Vous pouvez les supprimer depuis l'onglet *Branches* de GitHub.
+
+---
+
+<a id="échange-7"></a>
+## Échange 7 — Où trouver la nouvelle version ? (21/11, 10:31)
+
+### Demande de l'utilisateur
+
+> une fois fait je ne trouve pas les nouveaux ajouts
+
+### Travail réalisé
+
+1. Vérification de GitHub : `main` en 1.1.0 avec tous les nouveaux fichiers ;
+   étiquettes `v1.0.0` et `v1.1.0` bien poussées par l'utilisateur.
+2. Consultation des pages publiques *Releases* et *Actions* : aucune version
+   publiée, aucune exécution de la CI.
+3. Diagnostic : copie locale ancienne probable, et GitHub Actions
+   vraisemblablement désactivé (d'où l'absence de version publiée).
+
+### Réponse de l'assistant (texte intégral)
+
+> J'ai vérifié : tout est bien sur GitHub. `main` est en version 1.1.0 et contient tous les nouveaux fichiers (regroupement, didacticiel, page d'accueil). Vos étiquettes `v1.0.0` et `v1.1.0` sont aussi arrivées. Le problème vient donc d'ailleurs, et je vois deux causes possibles.
+>
+> **1. Vous lancez une ancienne copie de l'outil.** C'est le plus probable si vous ne voyez pas les nouveautés dans l'application. Votre dossier local date sans doute d'avant la mise à jour, par exemple celui du zip `log_waver.zip` de la première version. Pour récupérer la 1.1.0 :
+> - si vous avez cloné le dépôt, placez-vous dans son dossier et tapez `git checkout main` puis `git pull` ;
+> - sinon, téléchargez à nouveau le projet sur https://github.com/DavidBoccara/LogWaver avec le bouton vert *Code > Download ZIP*, puis lancez `python main.py` depuis ce **nouveau** dossier.
+>
+> Vous saurez que c'est la bonne version si :
+> - au lancement sans argument, une page d'accueil « Bienvenue dans LogWaver » s'affiche ;
+> - la barre d'outils contient un bouton **Didacticiel** ;
+> - au-dessus de la liste, il y a un menu **« Regrouper par : »** ;
+> - le menu *Aide > À propos* indique **1.1.0**.
+>
+> **2. Vous cherchez dans l'onglet *Releases*.** Il est vide, et l'onglet *Actions* n'affiche aucune exécution. La vérification automatique (CI) n'a donc jamais tourné, ni lors de mes envois ni lors de votre envoi d'étiquettes. Or c'est elle qui crée les versions dans *Releases*. La cause la plus courante : GitHub Actions est désactivé sur le dépôt.
+>
+> Pour corriger :
+> 1. Allez dans *Settings > Actions > General* et cochez **« Allow all actions and reusable workflows »**.
+> 2. Relancez la publication en renvoyant l'étiquette :
+> ```bash
+> git push origin :refs/tags/v1.1.0
+> git push origin v1.1.0
+> ```
+> Sinon, créez la version à la main dans *Releases > Draft a new release* en choisissant l'étiquette `v1.1.0`.
+>
+> Si ce n'est ni l'un ni l'autre, dites-moi où vous regardez (l'application lancée sur votre poste ou une page GitHub) et ce qui s'affiche : je chercherai la cause précise.
+
+---
+
+<a id="échange-8"></a>
+## Échange 8 — Plugins par extension, assistant regex, priorités et correspondance (22/11, 12:08)
+
+### Demande de l'utilisateur
+
+> J'aimerais que tu puisse renseigner dans l'outil l'extension du fichier par exemple si c'est un .log ou .mx comme ça l'outil connais automatiquement quelle plugin utiliser. aussi j'aimerais que l'outil de création de plugin soit plus puissant, deja qu'il puisse cree un plugin de zero même si des plugin sont deja renseigné, ensuit pour la regex l'idée est de proposer a l'utilisateur de dans un premier temps, choisir le type voulu comme "warning" par exemple, ensuit il sélectionne la ligne ou l'intégralité du warning apparait. puis l'outil propose de sélectionner les élément comme le chemin du fichier, le code etc etc . chaque élément renseigné doivent pouvoir bouger complètement donc la regex doit se baser uniquement sur ce qui n'est pas renseigné qu'on considérera comme invariant, l'outil doit pouvoir proposer de sélectionner les éléments qui peuvent varier mais qui n'intéresse pas. enfin j'aimerais qu'il y ai des niveau de priorité par exemple si on renseigne un nouveau fichier projet ou une meme ligne est indiqué en "rejeté" alors ça puisse prendre le dessus sur le "justifié" déjà présent. aussi j'aimerais que l'outil puisse nous permettre de sélectionner ce qui sera comparé pour retrouver une justification déjà présente, ça veux dire que on peux permettre a l'outil de associer une justification deja presente a un warning du nouveau log qui n'est pas exactement pareille mais pour ça il faut pouvoir montrer ce qui peux changer n'hesitpas a rendre cette option le plus facilement compreensible.
+
+### Travail réalisé (résumé chronologique)
+
+1. Branche `feature/plugins-correspondance-priorites` créée depuis `develop`
+   (identique à `main`, 1.1.0).
+2. **Priorités** : attribut `priority` des catégories (configuration d'exemple :
+   Rejeté 50, En cours d'analyse 40, À traiter 30, Justifié 20, Clôturé 10).
+3. **Refonte de la correspondance** :
+   * `MatchingOptions` enrichi des tolérances sur la description (nombres, texte
+     entre guillemets, noms de fichiers/chemins) ;
+   * `FingerprintBuilder` réécrit : contexte brut complet mémorisé avec chaque
+     justification, empreinte recalculable selon n'importe quelles règles,
+     identifiant strict indépendant des règles ;
+   * nouvel `JustificationIndex` : pour chaque clé, la justification retenue est
+     la plus prioritaire puis la plus récente ;
+   * session : justifier/retirer agissent sur toutes les justifications de la
+     clé ; import résolu par priorité (ajoutées / remplacées / écartées) ;
+     `set_matching_options` et `preview_matching` (éléments gagnés / perdus) ;
+   * fichiers projet et justifications en **format v2** (règles enregistrées),
+     lecture des fichiers v1 conservée et testée.
+4. **Extensions** : `file_extensions` dans les plugins ; détection par
+   extension puis par contenu ; choix manuel proposé en dernier recours avec
+   **mémorisation de l'extension** dans le plugin (modification de la seule
+   ligne concernée, commentaires préservés).
+   * Un test a révélé qu'une extension courante (`.log`) déclarée par un plugin
+     qui ne reconnaît rien pouvait masquer le bon plugin : règle affinée
+     (le contenu l'emporte alors, l'extension restant décisive si rien ne
+     reconnaît le contenu).
+5. **Générateur de regex réécrit** : texte non sélectionné = invariant exact
+   (seuls les espaces sont tolérés) ; éléments sélectionnés = `.+?` (valeur
+   libre) ; parties variables sans intérêt marquées explicitement ; détection
+   automatique des dates/nombres ; refus explicite de deux sélections collées ;
+   application à tout l'exemple.
+6. **Assistant regex pas à pas** (`RegexWizardDialog` + `RegexWizardPresenter`) :
+   type → ligne → éléments (avec modèle de ligne lisible) → vérification.
+7. **Éditeur de plugin** : bouton « Nouveau plugin », champ « Extensions des
+   logs » (prérempli depuis le log d'exemple), assistant à la place de l'ancien
+   marquage, enregistrement proposé dans `plugins/`. Menus « Outils > Créer un
+   nouveau plugin » et « Modifier le plugin actuel ».
+8. **Règles de correspondance** (`MatchingRulesDialog` + présentateur, menu
+   Édition, Ctrl+M) : préréglages, critères illustrés par l'élément
+   sélectionné, tolérances, « ce qui sera comparé », aperçu avant → après et
+   listes des éléments gagnés / perdus.
+9. Didacticiel : étape « Règles de correspondance » (17 étapes).
+10. **Vérifications** : 21 nouveaux tests (priorités, correspondance, format v1,
+    extensions, générateur, assistant et dialogue pilotés), **64 tests
+    réussis** ; parcours complet dans la fenêtre principale (détection par
+    contenu d'un `.xyz`, choix manuel et mémorisation de `.mx`) ; revue visuelle
+    de l'assistant, du dialogue des règles et de l'éditeur, suivie de trois
+    retouches (explications tronquées, liste sans retour à la ligne, colonnes
+    « Ligne » ambiguës).
+11. Documentation (README, CHANGELOG 1.2.0), version 1.2.0, livraison sur
+    `develop` puis `main`.
+
+### Réponse de l'assistant
+
+Le texte intégral de la réponse sera ajouté lors de la prochaine mise à jour
+de l'historique.
 
 ---
 
@@ -475,6 +610,15 @@ La réponse de l'assistant à cet échange sera ajoutée lors de la prochaine mi
 | D30 | Actions **« Montre-moi »** exécutées par le présentateur principal et référencées par nom | Le didacticiel montre le vrai fonctionnement, sur de vraies données | Captures ou animations figées |
 | D31 | **Bandeau « À faire »** contextuel, page d'accueil en 3 étapes, barre d'outils réduite, filtres avancés repliés | Réduire la charge cognitive : l'utilisateur voit toujours l'action suivante | Documentation seule |
 | D32 | Catégorie **proposée par défaut** configurable (`justified` dans l'exemple) | Cas le plus fréquent en un clic, sans figer d'identifiant dans le code | Première catégorie de la liste |
+| D33 | Extensions déclarées **dans le plugin** (`file_extensions`) ; mémorisation par modification de la seule ligne concernée | Le plugin reste l'unique description d'un outil, lisible à la main ; commentaires préservés | Table extension → plugin dans les préférences (invisible et non partageable) |
+| D34 | Extension prioritaire, **sauf** si ses plugins ne reconnaissent rien alors qu'un autre reconnaît le contenu | Une extension générique (`.log`) ne doit pas masquer le bon plugin | Extension toujours prioritaire |
+| D35 | Regex fondées **uniquement sur le texte invariant** ; éléments en `.+?` ; parties variables marquées explicitement avec proposition automatique | Exigence : les éléments peuvent « bouger complètement » | Généralisation automatique du texte fixe (version 1.0), imprévisible pour l'utilisateur |
+| D36 | Assistant en **QWizard** à 4 étapes, avec modèle de ligne `‹…›` et vérification sur tout l'exemple | Guidage pas à pas, résultat compréhensible avant validation | Formulaire unique |
+| D37 | **Priorité** portée par la catégorie ; à l'import, la plus prioritaire l'emporte ; à égalité, l'existante est gardée | « Rejeté » doit primer sur « Justifié » ; ne jamais écraser son propre travail sans raison | Date la plus récente ; question systématique |
+| D38 | Justification stockée avec son **contexte complet** et un identifiant strict ; correspondance calculée à la volée par un **index** | Règles modifiables à tout moment sans perte ni migration ; retour arrière exact | Recalcul et fusion des justifications (perte d'information) |
+| D39 | Règles de correspondance **enregistrées dans le projet**, défaut issu de la configuration | Chaque projet garde son niveau de tolérance | Réglage global uniquement |
+| D40 | Dialogue des règles avec **préréglages, exemple concret et aperçu gagnés/perdus** | Rendre l'option « le plus facilement compréhensible » : on voit l'effet avant de valider | Cases à cocher seules |
+| D41 | Format de fichier **v2** avec lecture des v1 → version **MINEURE** 1.2.0 | Conforme au plan de gestion de configuration (compatibilité ascendante préservée) | Version majeure |
 
 ## Problèmes rencontrés et traitements
 
@@ -491,6 +635,8 @@ La réponse de l'assistant à cet échange sera ajoutée lors de la prochaine mi
 | Test d'IHM du didacticiel réussissant à tort (fenêtre non affichée pendant le test) | Test rendu strict (fenêtre affichée, progression vérifiée sur l'état du présentateur) |
 | « Montre-moi » déclenché sur une étape sans action provoquait une erreur (révélé par le test strict) | Le présentateur ignore désormais ce cas |
 | Cadres de détail vides affichés sans sélection ; catégories tronquées didacticiel ouvert | Cadres masqués sans sélection ; largeur minimale du panneau des catégories (QSS) |
+| Plugin déclarant `.log` choisi d'office même sans rien reconnaître (révélé par un test) | Règle de détection affinée (D34) |
+| Dialogue des règles : explications tronquées, texte des listes coupé ; assistant : deux colonnes « Ligne » | Zone défilante, exemple déplacé sous chaque critère, retour à la ligne, colonne « N° dans l'exemple » |
 
 ## Couverture des exigences
 
@@ -518,3 +664,8 @@ La réponse de l'assistant à cet échange sera ajoutée lors de la prochaine mi
 | Outil le plus simple possible à prendre en main | Page d'accueil, détection du plugin, bandeau « À faire », barre d'outils réduite, fenêtre « Justifier » simplifiée |
 | Didacticiel | `resources/tutorial/didacticiel.ini`, `TutorialPanel`, `TutorialPresenter` |
 | Replier les éléments par texte redondant (code, fichier, tout champ) et justifier tout un groupe | `model/grouping.py`, `EntryTree`, « Regrouper par » |
+| Renseigner l'extension (.log, .mx) pour choisir automatiquement le plugin | `file_extensions`, `PluginDetector`, `PluginExtensionRegistrar`, champ de l'éditeur |
+| Créer un plugin de zéro même si des plugins existent | Outils > Créer un nouveau plugin, bouton « Nouveau plugin » |
+| Regex : type → ligne → éléments → parties variables ignorées, fondée sur l'invariant | `RegexWizardDialog`, `RegexWizardPresenter`, `RegexGenerator` |
+| Niveaux de priorité (« Rejeté » prime sur « Justifié ») | `priority`, `JustificationIndex`, `WaverSession.import_rules` |
+| Choisir ce qui est comparé pour retrouver une justification, en montrant ce qui peut changer | `MatchingRulesDialog`, `MatchingRulesPresenter`, `matching_presets.py` |

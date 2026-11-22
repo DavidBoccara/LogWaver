@@ -33,6 +33,7 @@ from logwaver import __version__
 from logwaver.constants import APP_NAME
 from logwaver.view.dialogs.ai_help_dialog import AiHelpDialog
 from logwaver.view.dialogs.justification_dialog import JustificationDialog
+from logwaver.view.dialogs.matching_rules_dialog import MatchingRulesDialog
 from logwaver.view.dialogs.pdf_viewer_dialog import PdfViewerDialog, is_web_engine_available
 from logwaver.view.dialogs.plugin_editor_dialog import PluginEditorDialog
 from logwaver.view.dialogs.source_viewer_dialog import SourceViewerDialog
@@ -54,6 +55,8 @@ from logwaver.view_models import (
     EntryRow,
     GroupingChoice,
     JustificationRequest,
+    MatchingKeyView,
+    MatchingPresetView,
     StatusBarInfo,
     StatusChoice,
 )
@@ -101,6 +104,8 @@ class MainWindow(QMainWindow):
     goto_source_requested = pyqtSignal()
     change_user_requested = pyqtSignal()
     plugin_editor_requested = pyqtSignal()
+    new_plugin_requested = pyqtSignal()
+    matching_rules_requested = pyqtSignal()
     try_sample_requested = pyqtSignal()
     tutorial_requested = pyqtSignal()
     tutorial_next_requested = pyqtSignal()
@@ -465,6 +470,29 @@ class MainWindow(QMainWindow):
         """
         return AiHelpDialog(data, self)
 
+    def create_matching_rules_dialog(self, keys: Sequence[MatchingKeyView],
+                                     presets: Sequence[MatchingPresetView],
+                                     example_title: str) -> MatchingRulesDialog:
+        """Crée le dialogue des règles de correspondance (piloté par le présentateur).
+
+        :param keys: critères proposés.
+        :param presets: préréglages.
+        :param example_title: élément servant d'exemple.
+        :return: dialogue non affiché.
+        """
+        return MatchingRulesDialog(keys, presets, example_title, self)
+
+    def ask_item(self, title: str, label: str, items: Sequence[str]) -> Optional[int]:
+        """Fait choisir un élément dans une liste.
+
+        :param title: titre du dialogue.
+        :param label: question posée.
+        :param items: choix proposés.
+        :return: index choisi, ou ``None`` si annulé.
+        """
+        choice, accepted = QInputDialog.getItem(self, title, label, list(items), 0, False)
+        return list(items).index(choice) if accepted and choice in items else None
+
     def create_plugin_editor(self) -> PluginEditorDialog:
         """Crée l'éditeur de plugin (le présentateur le pilote).
 
@@ -540,8 +568,12 @@ class MainWindow(QMainWindow):
             ("goto_source", "Ouvrir le fichier source", "Ctrl+G", self.goto_source_requested),
             ("change_user", "Changer d'utilisateur…", None, self.change_user_requested),
             ("search", "Rechercher", QKeySequence.Find, None),
-            ("plugin_editor", "Éditeur de plugin / testeur de regex…", "Ctrl+R",
+            ("plugin_editor", "Modifier le plugin actuel…", "Ctrl+R",
              self.plugin_editor_requested),
+            ("new_plugin", "Créer un nouveau plugin…", "Ctrl+Shift+N",
+             self.new_plugin_requested),
+            ("matching_rules", "Règles de correspondance…", "Ctrl+M",
+             self.matching_rules_requested),
             ("tutorial", "Didacticiel", "Shift+F1", self.tutorial_requested),
             ("about", "À propos", None, None),
         )
@@ -566,9 +598,9 @@ class MainWindow(QMainWindow):
                           "export_rules", None, "export_excel", "export_docx", None,
                           "load_plugin", "close_logs", None, "quit")),
             ("&Édition", ("undo", "redo", None, "classify", "unclassify", None, "search",
-                          None, "change_user")),
+                          None, "matching_rules", "change_user")),
             ("É&lément", ("ai_help", "documentation", "goto_source")),
-            ("&Outils", ("plugin_editor",)),
+            ("&Outils", ("new_plugin", "plugin_editor")),
             ("&Aide", ("tutorial", None, "about")),
         )
         for title, keys in menus:

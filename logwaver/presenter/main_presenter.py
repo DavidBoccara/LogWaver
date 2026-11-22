@@ -29,13 +29,18 @@ from logwaver.model.events import (
 )
 from logwaver.model.exceptions import LogWaverError
 from logwaver.model.grouping import GROUP_NONE, EntryGrouper, GroupingOption
-from logwaver.model.plugin_detector import PluginDetector
+from logwaver.model.plugin_detector import (
+    REASON_EXTENSION,
+    PluginDetector,
+    PluginExtensionRegistrar,
+)
 from logwaver.model.preferences import UserPreferences
 from logwaver.model.session import WaverSession
 from logwaver.model.source_files import ExternalEditorLauncher, SourceFileReader
 from logwaver.model.tutorial import TutorialLoader
 from logwaver.presenter.ai_assistant_presenter import AiAssistantPresenter
 from logwaver.presenter.error_handling import guarded
+from logwaver.presenter.matching_rules_presenter import MatchingRulesPresenter
 from logwaver.presenter.plugin_editor_presenter import PluginEditorPresenter
 from logwaver.presenter.tutorial_presenter import TutorialPresenter
 from logwaver.view_models import (
@@ -189,6 +194,8 @@ class MainPresenter:
         view.goto_source_requested.connect(self._on_goto_source)
         view.change_user_requested.connect(self._on_change_user)
         view.plugin_editor_requested.connect(self._on_plugin_editor)
+        view.new_plugin_requested.connect(self._on_new_plugin)
+        view.matching_rules_requested.connect(self._on_matching_rules)
         view.try_sample_requested.connect(self._on_try_sample)
         view.tutorial_requested.connect(self._on_tutorial)
         view.grouping_changed.connect(self._on_grouping_changed)
@@ -337,35 +344,64 @@ class MainPresenter:
         if report.entry_count == 0:
             self._view.show_warning(
                 f"Aucun élément reconnu dans « {path.name} ». Vérifiez que le plugin "
-                "correspond à ce log (Outils > Éditeur de plugin pour tester les regex)."
+                "correspond à ce log (Outils > Modifier le plugin actuel, puis l'assistant regex)."
             )
 
     def _load_detected_plugin(self, log_path: Path, required: bool) -> bool:
-        """Charge le plugin qui reconnaît le mieux un log.
+        """Charge le plugin adapté à un log (extension, puis contenu).
 
         :param log_path: log à analyser.
-        :param required: lève une erreur si aucun plugin ne convient.
+        :param required: si aucun plugin ne convient, demander à l'utilisateur
+            (sinon simplement renoncer).
         :return: ``True`` si un nouveau plugin a été chargé.
-        :raises LogWaverError: si ``required`` et qu'aucun plugin ne convient.
+        :raises LogWaverError: si ``required`` et qu'aucun plugin n'est choisi.
         """
         candidate = self._detector.detect(log_path)
         if candidate is None:
-            if required:
-                raise LogWaverError(
-                    f"Aucun plugin connu ne reconnaît « {log_path.name} ».\n\n"
-                    "Choisissez un plugin (Fichier > Choisir le plugin) ou créez-en un "
-                    "avec l'éditeur de plugin (menu Outils)."
-                )
-            return False
+            return self._choose_plugin_manually(log_path) if required else False
         current = self._session.plugin
         if current is not None and current.source_path == candidate.path:
             return False
         plugin = self._session.load_plugin(candidate.path)
         self._view.set_type_filter_options(plugin.type_names)
-        self._view.show_status_message(
-            f"Outil reconnu automatiquement : {plugin.tool_name} "
-            f"({candidate.matched_lines} ligne(s) reconnue(s))."
-        )
+        how = (f"par son extension « {log_path.suffix.lower()} »"
+               if candidate.reason == REASON_EXTENSION
+               else f"par son contenu ({candidate.matched_lines} ligne(s) reconnue(s))")
+        self._view.show_status_message(f"Outil reconnu automatiquement {how} : "
+                                       f"{plugin.tool_name}.")
+        return True
+
+    def _choose_plugin_manually(self, log_path: Path) -> bool:
+        """Fait choisir le plugin et propose de mémoriser l'extension du fichier.
+
+        :param log_path: log qu'aucun plugin ne reconnaît automatiquement.
+        :return: ``True`` (un plugin a été chargé).
+        :raises LogWaverError: si aucun plugin n'existe ou si l'utilisateur annule.
+        """
+        plugins = self._detector.available_plugins()
+        if not plugins:
+            raise LogWaverError(
+                "Aucun plugin n'est disponible. Créez-en un : Outils > Créer un nouveau "
+                "plugin.")
+        index = self._view.ask_item(
+            "Quel outil a produit ce fichier ?",
+            f"Aucun plugin ne reconnaît automatiquement « {log_path.name} ».\n"
+            "Choisissez l'outil qui l'a produit :",
+            [f"{c.definition.tool_name}  ({c.path.name})" for c in plugins])
+        if index is None:
+            raise LogWaverError(
+                "Ouverture annulée : aucun plugin choisi. Si l'outil est nouveau, créez "
+                "son plugin : Outils > Créer un nouveau plugin.")
+        chosen = plugins[index]
+        extension = log_path.suffix.lower()
+        if extension and extension not in chosen.definition.file_extensions \
+                and self._view.ask_yes_no(
+                    f"Associer l'extension « {extension} » au plugin "
+                    f"{chosen.definition.tool_name} ?\n\nLes prochains fichiers {extension} "
+                    "seront alors reconnus automatiquement."):
+            PluginExtensionRegistrar().add_extension(chosen.path, extension)
+        plugin = self._session.load_plugin(chosen.path)
+        self._view.set_type_filter_options(plugin.type_names)
         return True
 
     @guarded
@@ -519,15 +555,14 @@ class MainPresenter:
         path = self._view.ask_open_file("Importer des justifications", RULES_FILTER)
         if path is None:
             return
-        overwrite = bool(self._session.justifications) and self._view.ask_yes_no(
-            "Des justifications existent déjà. Remplacer celles qui portent sur les "
-            "mêmes éléments par celles du fichier importé ?"
-        )
-        report = self._session.import_rules(path, overwrite)
+        report = self._session.import_rules(path)
         message = (
-            f"{report.imported} justification(s) importée(s), {report.skipped} ignorée(s) "
-            f"(déjà présentes).\n{report.matched_entries} élément(s) des logs ouverts "
-            "sont désormais justifiés automatiquement."
+            f"• {report.added} nouvelle(s) justification(s)\n"
+            f"• {report.replaced} remplacée(s) par une catégorie plus prioritaire\n"
+            f"• {report.kept} écartée(s) : la justification déjà présente est "
+            "prioritaire ou de même priorité\n\n"
+            f"{report.matched_entries} élément(s) des logs ouverts sont concernés. "
+            "Ctrl+Z annule l'import."
         )
         if report.warning:
             message += f"\n\nAttention : {report.warning}"
@@ -644,9 +679,39 @@ class MainPresenter:
     def _on_plugin_editor(self) -> None:
         """Ouvre l'éditeur de plugin sur le plugin courant."""
         current = self._session.plugin.source_path if self._session.plugin else None
+        self._run_plugin_editor(current)
+
+    @guarded
+    def _on_new_plugin(self) -> None:
+        """Ouvre l'éditeur sur un plugin vierge, quels que soient les plugins existants."""
+        self._run_plugin_editor(None)
+
+    def _run_plugin_editor(self, plugin_path: Optional[Path]) -> None:
+        """Ouvre l'éditeur de plugin.
+
+        :param plugin_path: plugin à modifier (``None`` = nouveau plugin).
+        """
         PluginEditorPresenter(
-            self._view.create_plugin_editor(), on_saved=self._on_plugin_saved
-        ).run(current)
+            self._view.create_plugin_editor(), on_saved=self._on_plugin_saved,
+            default_directory=self._paths.plugins_directory,
+        ).run(plugin_path)
+
+    @guarded
+    def _on_matching_rules(self) -> None:
+        """Ouvre le réglage des règles de correspondance, illustré par la sélection."""
+        example = self._single_selected_entry() or (
+            self._session.entries[0] if self._session.entries else None)
+        dialog = self._view.create_matching_rules_dialog(
+            MatchingRulesPresenter.key_views(example, self._session),
+            MatchingRulesPresenter.preset_views(),
+            MatchingRulesPresenter.example_title(example))
+        before = sum(1 for e in self._session.entries if self._session.justification_of(e))
+        if MatchingRulesPresenter(dialog, self._session).run(example):
+            after = sum(1 for e in self._session.entries
+                        if self._session.justification_of(e))
+            self._view.show_status_message(
+                f"Règles de correspondance appliquées : {before} → {after} élément(s) "
+                "justifié(s). Elles sont enregistrées avec le projet.")
 
     @guarded
     def _on_plugin_saved(self, path: Path) -> None:
@@ -787,7 +852,9 @@ class MainPresenter:
         items += [
             CategoryItem(status.status_id, status.label,
                          summary.count_for_category(status.status_id),
-                         status.color, status.description)
+                         status.color,
+                         f"{status.description}\nPriorité en cas de conflit : "
+                         f"{status.priority}")
             for status in self._session.config.statuses
         ]
         items.append(CategoryItem(CATEGORY_ALL, CATEGORY_ALL_LABEL, summary.total,

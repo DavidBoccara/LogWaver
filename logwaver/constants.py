@@ -63,7 +63,7 @@ SOURCE_IMPORTED: str = "importée"
 # --- Formats de fichiers ------------------------------------------------------
 PROJECT_FORMAT_NAME: str = "logwaver-project"
 RULES_FORMAT_NAME: str = "logwaver-justifications"
-FILE_FORMAT_VERSION: int = 1
+FILE_FORMAT_VERSION: int = 2  # v2 : règles de correspondance enregistrées
 PROJECT_FILE_EXTENSION: str = ".lwp"
 RULES_FILE_EXTENSION: str = ".lwj"
 PLUGIN_FILE_EXTENSION: str = ".ini"

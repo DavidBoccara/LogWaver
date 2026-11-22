@@ -49,9 +49,11 @@ de celle de LogWaver.
   format incrémente cette valeur et impose une version MAJEURE de l'application,
   sauf si la lecture des anciens fichiers est conservée (alors MINEURE).
 
-> ⚠️ **Empreinte des justifications** : modifier `FingerprintBuilder` ou les clés
-> `[matching]` par défaut rend les justifications existantes introuvables.
-> C'est une rupture de compatibilité (version MAJEURE + note de migration).
+> ⚠️ **Empreinte des justifications** : depuis la 1.2.0, les règles de
+> correspondance sont réglables et enregistrées dans chaque projet ; les
+> justifications gardent leur contexte complet. En revanche, modifier le contenu
+> du contexte mémorisé ou l'identifiant strict (`FingerprintBuilder.strict`)
+> reste une rupture de compatibilité (version MAJEURE + note de migration).
 
 ## 4. Branches (modèle Git Flow simplifié)
 

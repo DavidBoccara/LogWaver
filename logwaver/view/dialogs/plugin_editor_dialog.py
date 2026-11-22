@@ -1,4 +1,4 @@
-"""Éditeur de plugin avec testeur de regex et génération automatique.
+"""Éditeur de plugin : création de zéro, testeur de regex et assistant pas à pas.
 
 La vue conserve uniquement l'état du formulaire (texte saisi). Toute la
 logique (test, génération, validation, lecture/écriture) est confiée au
@@ -10,10 +10,9 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFontDatabase, QTextCursor
+from PyQt5.QtGui import QFontDatabase
 from PyQt5.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QDialog,
     QFileDialog,
     QFormLayout,
@@ -36,31 +35,31 @@ from PyQt5.QtWidgets import (
 
 from logwaver.constants import STANDARD_FIELDS
 from logwaver.view.dialogs.regex_highlighter import RegexHighlighter
-from logwaver.view_models import PluginFormData, PluginTypeData, RegexTestRow, SelectionMark
+from logwaver.view.dialogs.regex_wizard_dialog import RegexWizardDialog
+from logwaver.view_models import PluginFormData, PluginTypeData, RegexTestRow
 
 TEST_DEBOUNCE_MS: int = 300
 FIELD_COLUMN_NAME: int = 0
 FIELD_COLUMN_REGEX: int = 1
-GENERATION_HELP: str = (
-    "Génération automatique : collez une ligne de log dans l'exemple, "
-    "sélectionnez à la souris la valeur d'un champ, choisissez le champ puis "
-    "cliquez sur « Marquer la sélection ». Répétez pour chaque champ, puis "
-    "cliquez sur « Générer les regex »."
+WIZARD_HELP: str = (
+    "Le plus simple : laissez l'assistant écrire les regex. Choisissez le type "
+    "(ex. Warning), cliquez sur une ligne d'exemple, surlignez les éléments à "
+    "extraire (chemin, code…) et les parties variables sans intérêt (date…). "
+    "Le reste de la ligne sert de repère fixe."
 )
 
 
 class PluginEditorDialog(QDialog):
     """Formulaire d'édition d'un fichier plugin."""
 
+    new_requested = pyqtSignal()
     open_requested = pyqtSignal()
     save_requested = pyqtSignal()
     save_as_requested = pyqtSignal()
     validate_requested = pyqtSignal()
     load_sample_requested = pyqtSignal()
     test_requested = pyqtSignal(str, str)
-    mark_requested = pyqtSignal(object)
-    clear_marks_requested = pyqtSignal()
-    generate_requested = pyqtSignal()
+    wizard_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Construit l'éditeur.
@@ -85,6 +84,7 @@ class PluginEditorDialog(QDialog):
         :param data: contenu du plugin.
         """
         self._tool_edit.setText(data.tool_name)
+        self._extensions_edit.setText(data.file_extensions)
         self._pdf_edit.setText(data.pdf_documentation)
         self._index_edit.setText(data.pdf_page_index)
         self._types = {item.name: item for item in data.types}
@@ -110,6 +110,7 @@ class PluginEditorDialog(QDialog):
             pdf_documentation=self._pdf_edit.text().strip(),
             pdf_page_index=self._index_edit.text().strip(),
             types=tuple(self._types[name] for name in ordered),
+            file_extensions=self._extensions_edit.text().strip(),
         )
 
     def set_file_label(self, text: str) -> None:
@@ -153,18 +154,51 @@ class PluginEditorDialog(QDialog):
         self._test_status.style().unpolish(self._test_status)
         self._test_status.style().polish(self._test_status)
 
-    def set_marks(self, marks: Sequence[SelectionMark]) -> None:
-        """Affiche les sélections marquées pour la génération.
+    def sample_text(self) -> str:
+        """Retourne le texte d'exemple.
 
-        :param marks: sélections courantes.
+        :return: lignes de log d'exemple.
         """
-        self._marks_list.clear()
-        ranges: Dict[int, List[Tuple[int, int]]] = {}
-        for mark in marks:
-            self._marks_list.addItem(f"{mark.field_name} = « {mark.selected_text} »")
-            ranges.setdefault(mark.line_number, []).append((mark.start, mark.end))
-        self._highlighter.set_mark_ranges(ranges)
-        self._generate_button.setEnabled(bool(marks))
+        return self._sample_edit.toPlainText()
+
+    def type_names(self) -> List[str]:
+        """Retourne les types d'éléments du formulaire.
+
+        :return: noms des types, dans l'ordre.
+        """
+        return [self._type_list.item(i).text() for i in range(self._type_list.count())]
+
+    def type_field_names(self, type_name: str) -> List[str]:
+        """Retourne les champs déclarés pour un type.
+
+        :param type_name: type concerné.
+        :return: noms des champs (vide si le type n'existe pas).
+        """
+        self._store_current_type()
+        item = self._types.get(type_name)
+        return [name for name, _ in item.field_regexes] if item else []
+
+    def select_or_create_type(self, type_name: str) -> None:
+        """Sélectionne un type, en le créant s'il n'existe pas.
+
+        :param type_name: type voulu.
+        """
+        if type_name not in self._types:
+            self._store_current_type()
+            self._types[type_name] = PluginTypeData(type_name, "", ())
+            self._type_list.addItem(type_name)
+        for row in range(self._type_list.count()):
+            if self._type_list.item(row).text() == type_name:
+                self._type_list.setCurrentRow(row)
+                break
+
+    def create_regex_wizard(self, initial_type: str) -> RegexWizardDialog:
+        """Crée l'assistant regex (le présentateur le pilote).
+
+        :param initial_type: type proposé à l'étape 1.
+        :return: assistant non affiché.
+        """
+        return RegexWizardDialog(self.type_names(), initial_type, self)
 
     def apply_generated(self, detect_regex: str,
                         field_regexes: Sequence[Tuple[str, str]]) -> None:
@@ -175,6 +209,7 @@ class PluginEditorDialog(QDialog):
         """
         if not self._current_type:
             return
+        self._store_current_type()
         existing = dict(self._read_field_rows())
         existing.update(dict(field_regexes))
         order = [name for name, _ in self._read_field_rows()]
@@ -233,6 +268,11 @@ class PluginEditorDialog(QDialog):
         self._file_label = QLabel("Nouveau plugin")
         self._file_label.setObjectName("HintLabel")
         self._tool_edit = QLineEdit()
+        self._extensions_edit = QLineEdit()
+        self._extensions_edit.setPlaceholderText(".log, .mx")
+        self._extensions_edit.setToolTip(
+            "Extensions des logs produits par cet outil : un fichier portant l'une "
+            "d'elles sera automatiquement associé à ce plugin.")
         self._pdf_edit = QLineEdit()
         self._pdf_edit.setPlaceholderText("chemin relatif au plugin, ex. manuel.pdf")
         self._index_edit = QLineEdit()
@@ -265,14 +305,10 @@ class PluginEditorDialog(QDialog):
         self._result_table.setHorizontalHeaderLabels(["Ligne", "Valeur extraite"])
         self._result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._result_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._mark_field_combo = QComboBox()
-        self._mark_field_combo.setEditable(True)
-        self._mark_button = QPushButton("Marquer la sélection")
-        self._clear_marks_button = QPushButton("Réinitialiser")
-        self._marks_list = QListWidget()
-        self._generate_button = QPushButton("Générer les regex")
-        self._generate_button.setProperty("role", "primary")
-        self._generate_button.setEnabled(False)
+        self._wizard_button = QPushButton("✨ Assistant regex pas à pas…")
+        self._wizard_button.setObjectName("WizardButton")
+        self._wizard_button.setProperty("role", "hero")
+        self._new_button = QPushButton("Nouveau plugin")
         self._open_button = QPushButton("Ouvrir…")
         self._save_button = QPushButton("Enregistrer")
         self._save_as_button = QPushButton("Enregistrer sous…")
@@ -288,6 +324,7 @@ class PluginEditorDialog(QDialog):
         general_form = QFormLayout(general_box)
         general_form.addRow("Fichier :", self._file_label)
         general_form.addRow("Nom de l'outil :", self._tool_edit)
+        general_form.addRow("Extensions des logs :", self._extensions_edit)
         general_form.addRow("Documentation PDF :", self._pdf_edit)
         general_form.addRow("Index des pages :", self._index_edit)
 
@@ -328,26 +365,19 @@ class PluginEditorDialog(QDialog):
         sample_layout.addWidget(self._test_status)
         sample_layout.addWidget(self._result_table, stretch=1)
 
-        generation_box = QGroupBox("Assistant de génération automatique")
+        generation_box = QGroupBox("Créer les regex sans les écrire")
         generation_layout = QVBoxLayout(generation_box)
-        help_label = QLabel(GENERATION_HELP)
+        help_label = QLabel(WIZARD_HELP)
         help_label.setObjectName("HintLabel")
         help_label.setWordWrap(True)
         generation_layout.addWidget(help_label)
-        mark_row = QHBoxLayout()
-        mark_row.addWidget(QLabel("Champ :"))
-        mark_row.addWidget(self._mark_field_combo, stretch=1)
-        mark_row.addWidget(self._mark_button)
-        mark_row.addWidget(self._clear_marks_button)
-        generation_layout.addLayout(mark_row)
-        generation_layout.addWidget(self._marks_list)
-        generation_layout.addWidget(self._generate_button)
+        generation_layout.addWidget(self._wizard_button)
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(sample_box, stretch=2)
-        right_layout.addWidget(generation_box, stretch=1)
+        right_layout.addWidget(generation_box)
+        right_layout.addWidget(sample_box, stretch=1)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(left)
@@ -356,8 +386,8 @@ class PluginEditorDialog(QDialog):
         splitter.setStretchFactor(1, 1)
 
         bottom = QHBoxLayout()
-        for button in (self._open_button, self._save_button, self._save_as_button,
-                       self._validate_button):
+        for button in (self._new_button, self._open_button, self._save_button,
+                       self._save_as_button, self._validate_button):
             bottom.addWidget(button)
         bottom.addStretch(1)
         bottom.addWidget(self._close_button)
@@ -381,9 +411,8 @@ class PluginEditorDialog(QDialog):
         self._sample_edit.textChanged.connect(self._debounce.start)
         self._debounce.timeout.connect(self._request_test)
         self._load_sample_button.clicked.connect(self.load_sample_requested)
-        self._mark_button.clicked.connect(self._emit_mark)
-        self._clear_marks_button.clicked.connect(self.clear_marks_requested)
-        self._generate_button.clicked.connect(self.generate_requested)
+        self._wizard_button.clicked.connect(self.wizard_requested)
+        self._new_button.clicked.connect(self.new_requested)
         self._open_button.clicked.connect(self.open_requested)
         self._save_button.clicked.connect(self.save_requested)
         self._save_as_button.clicked.connect(self.save_as_requested)
@@ -410,7 +439,6 @@ class PluginEditorDialog(QDialog):
         for widget in (self._detect_edit, self._field_table, self._add_field_button,
                        self._remove_field_button, self._test_detect_button):
             widget.setEnabled(item is not None)
-        self._refresh_mark_fields()
         self._activate_detect()
 
     def _store_current_type(self) -> None:
@@ -514,17 +542,7 @@ class PluginEditorDialog(QDialog):
         if row >= 0:
             self._field_table.removeRow(row)
             self._store_current_type()
-            self._refresh_mark_fields()
             self._activate_detect()
-
-    def _refresh_mark_fields(self) -> None:
-        """Propose les champs du type courant dans l'assistant."""
-        current = self._mark_field_combo.currentText()
-        names = [name for name, _ in self._read_field_rows()] or list(STANDARD_FIELDS)
-        self._mark_field_combo.clear()
-        self._mark_field_combo.addItems(names)
-        if current in names:
-            self._mark_field_combo.setCurrentText(current)
 
     # ================================================================ tests
     def _activate_detect(self) -> None:
@@ -543,9 +561,6 @@ class PluginEditorDialog(QDialog):
         """
         if row >= 0:
             self._active_field_row = row
-            name_item = self._field_table.item(row, FIELD_COLUMN_NAME)
-            if name_item is not None:
-                self._mark_field_combo.setCurrentText(name_item.text())
             self._request_test()
 
     def _on_field_item_changed(self, _item: QTableWidgetItem) -> None:
@@ -554,7 +569,6 @@ class PluginEditorDialog(QDialog):
         :param _item: cellule modifiée (inutilisée).
         """
         self._store_current_type()
-        self._refresh_mark_fields()
         self._debounce.start()
 
     def _request_test(self) -> None:
@@ -571,25 +585,3 @@ class PluginEditorDialog(QDialog):
             item = self._field_table.item(self._active_field_row, FIELD_COLUMN_REGEX)
             return item.text() if item else ""
         return self._detect_edit.text()
-
-    # ============================================================ génération
-    def _emit_mark(self) -> None:
-        """Émet la sélection courante de l'exemple associée à un champ."""
-        cursor: QTextCursor = self._sample_edit.textCursor()
-        field_name = self._mark_field_combo.currentText().strip()
-        if not cursor.hasSelection() or not field_name:
-            self.show_error("Sélectionnez du texte dans l'exemple et choisissez un champ.")
-            return
-        start, end = cursor.selectionStart(), cursor.selectionEnd()
-        document = self._sample_edit.document()
-        block = document.findBlock(start)
-        if document.findBlock(end - 1).blockNumber() != block.blockNumber():
-            self.show_error("La sélection doit tenir sur une seule ligne.")
-            return
-        self.mark_requested.emit(SelectionMark(
-            field_name=field_name,
-            line_number=block.blockNumber() + 1,
-            line_text=block.text(),
-            start=start - block.position(),
-            end=end - block.position(),
-        ))

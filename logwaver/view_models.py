@@ -221,35 +221,44 @@ class PluginFormData:
     :param pdf_documentation: chemin du PDF.
     :param pdf_page_index: chemin de l'index des pages.
     :param types: types d'éléments.
+    :param file_extensions: extensions des logs, telles que saisies (ex. « .log, .mx »).
     """
 
     tool_name: str
     pdf_documentation: str
     pdf_page_index: str
     types: Tuple[PluginTypeData, ...]
+    file_extensions: str = ""
 
 
 @dataclass(frozen=True)
-class SelectionMark:
-    """Texte sélectionné dans l'exemple et associé à un champ.
+class WizardMarkView:
+    """Zone sélectionnée dans l'assistant regex.
 
-    :param field_name: champ visé.
-    :param line_number: ligne de l'exemple (1 = première).
-    :param line_text: texte complet de la ligne.
-    :param start: début de la sélection dans la ligne.
-    :param end: fin de la sélection dans la ligne.
+    :param label: « Code », « Fichier »… ou « Partie variable ignorée ».
+    :param text: texte sélectionné.
+    :param start: début dans la ligne.
+    :param end: fin dans la ligne.
+    :param ignored: ``True`` pour une partie variable sans intérêt.
     """
 
-    field_name: str
-    line_number: int
-    line_text: str
+    label: str
+    text: str
     start: int
     end: int
+    ignored: bool
 
-    @property
-    def selected_text(self) -> str:
-        """Retourne le texte sélectionné."""
-        return self.line_text[self.start:self.end]
+
+@dataclass(frozen=True)
+class WizardCheckRow:
+    """Ligne du tableau de vérification de l'assistant regex.
+
+    :param line_number: ligne de l'exemple.
+    :param values: valeurs extraites, dans l'ordre des champs.
+    """
+
+    line_number: int
+    values: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -284,3 +293,71 @@ class AiSuggestionData:
     assessment: str
     status_id: Optional[str]
     justification: str
+
+
+@dataclass(frozen=True)
+class MatchingSettings:
+    """Règles de correspondance telles qu'affichées dans le dialogue.
+
+    :param keys: attributs devant être identiques.
+    :param ignore_case: ignorer majuscules et minuscules.
+    :param mask_numbers: ignorer les nombres de la description.
+    :param mask_quoted: ignorer le texte entre guillemets de la description.
+    :param mask_paths: ignorer les noms de fichiers et chemins de la description.
+    """
+
+    keys: Tuple[str, ...]
+    ignore_case: bool
+    mask_numbers: bool
+    mask_quoted: bool
+    mask_paths: bool
+
+
+@dataclass(frozen=True)
+class MatchingKeyView:
+    """Critère de comparaison proposé à l'utilisateur.
+
+    :param key: identifiant de l'attribut.
+    :param label: libellé.
+    :param hint: conséquence de cocher/décocher, en une phrase.
+    :param example: valeur de l'élément d'exemple.
+    """
+
+    key: str
+    label: str
+    hint: str
+    example: str
+
+
+@dataclass(frozen=True)
+class MatchingPresetView:
+    """Préréglage proposé dans le dialogue.
+
+    :param key: identifiant.
+    :param label: libellé.
+    :param description: explication.
+    """
+
+    key: str
+    label: str
+    description: str
+
+
+@dataclass(frozen=True)
+class MatchingPreviewView:
+    """Effet des règles envisagées, affiché en direct.
+
+    :param preset_key: préréglage correspondant (vide = personnalisé).
+    :param compared: couples (critère, valeur comparée) pour l'élément d'exemple.
+    :param justified_before: éléments justifiés avec les règles actuelles.
+    :param justified_after: éléments justifiés avec les règles envisagées.
+    :param gained: couples (élément, justification qui lui serait appliquée).
+    :param lost: éléments qui perdraient leur justification.
+    """
+
+    preset_key: str
+    compared: Tuple[Tuple[str, str], ...]
+    justified_before: int
+    justified_after: int
+    gained: Tuple[Tuple[str, str], ...]
+    lost: Tuple[str, ...]

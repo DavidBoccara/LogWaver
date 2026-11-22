@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 from logwaver.constants import FILE_ENCODING, LOG_FALLBACK_ENCODING, STANDARD_FIELDS
 from logwaver.model.exceptions import LogWaverError, PluginError
@@ -13,10 +13,12 @@ from logwaver.model.plugin import (
     PluginDefinition,
     PluginLoader,
     PluginWriter,
+    normalize_extensions,
 )
-from logwaver.model.regex_tools import RegexGenerator, RegexTester
+from logwaver.model.regex_tools import RegexTester
 from logwaver.presenter.error_handling import guarded
-from logwaver.view_models import PluginFormData, PluginTypeData, RegexTestRow, SelectionMark
+from logwaver.presenter.regex_wizard_presenter import RegexWizardPresenter
+from logwaver.view_models import PluginFormData, PluginTypeData, RegexTestRow
 
 if TYPE_CHECKING:
     from logwaver.view.dialogs.plugin_editor_dialog import PluginEditorDialog
@@ -39,20 +41,22 @@ class PluginEditorPresenter:
         self,
         dialog: "PluginEditorDialog",
         on_saved: Optional[SavedCallback] = None,
+        default_directory: Optional[Path] = None,
     ) -> None:
         """Relie le dialogue aux outils de regex et de plugin.
 
         :param dialog: vue pilotée.
         :param on_saved: appelé avec le chemin après chaque enregistrement.
+        :param default_directory: dossier proposé pour un nouveau plugin
+            (celui où les plugins sont détectés automatiquement).
         """
         self._dialog = dialog
         self._on_saved = on_saved
         self._loader = PluginLoader()
         self._writer = PluginWriter()
         self._tester = RegexTester()
-        self._generator = RegexGenerator()
+        self._default_directory = default_directory
         self._current_path: Optional[Path] = None
-        self._marks: Dict[str, SelectionMark] = {}
         self._connect()
 
     def run(self, plugin_path: Optional[Path]) -> None:
@@ -63,22 +67,20 @@ class PluginEditorPresenter:
         if plugin_path is not None:
             self._open_path(plugin_path)
         else:
-            self._dialog.set_form_data(self._blank_form())
-            self._dialog.set_file_label(NEW_PLUGIN_LABEL)
+            self._start_blank()
         self._dialog.exec_()
 
     def _connect(self) -> None:
         """Abonne le présentateur aux signaux du dialogue."""
         dialog = self._dialog
+        dialog.new_requested.connect(self._on_new)
+        dialog.wizard_requested.connect(self._on_wizard)
         dialog.open_requested.connect(self._on_open)
         dialog.save_requested.connect(self._on_save)
         dialog.save_as_requested.connect(self._on_save_as)
         dialog.validate_requested.connect(self._on_validate)
         dialog.load_sample_requested.connect(self._on_load_sample)
         dialog.test_requested.connect(self._on_test)
-        dialog.mark_requested.connect(self._on_mark)
-        dialog.clear_marks_requested.connect(self._on_clear_marks)
-        dialog.generate_requested.connect(self._on_generate)
 
     def _report_error(self, message: str) -> None:
         """Affiche une erreur (utilisé par ``guarded``).
@@ -88,6 +90,17 @@ class PluginEditorPresenter:
         self._dialog.show_error(message)
 
     # ======================================================= fichiers plugin
+    @guarded
+    def _on_new(self) -> None:
+        """Repart d'un plugin vierge (les plugins existants ne sont pas modifiés)."""
+        self._start_blank()
+
+    def _start_blank(self) -> None:
+        """Affiche un formulaire vierge, non associé à un fichier."""
+        self._current_path = None
+        self._dialog.set_form_data(self._blank_form())
+        self._dialog.set_file_label(NEW_PLUGIN_LABEL)
+
     @guarded
     def _on_open(self) -> None:
         """Ouvre un plugin existant."""
@@ -118,8 +131,10 @@ class PluginEditorPresenter:
     def _on_save_as(self) -> None:
         """Enregistre dans un nouveau fichier."""
         default = self._dialog.form_data().tool_name.lower() or "plugin"
-        path = self._dialog.ask_save_path("Enregistrer le plugin", PLUGIN_FILTER,
-                                          f"{default}.ini")
+        directory = (self._current_path.parent if self._current_path
+                     else self._default_directory)
+        default_path = str(directory / f"{default}.ini") if directory else f"{default}.ini"
+        path = self._dialog.ask_save_path("Enregistrer le plugin", PLUGIN_FILTER, default_path)
         if path:
             target = Path(path)
             self._save_to(target if target.suffix else target.with_suffix(".ini"))
@@ -159,9 +174,17 @@ class PluginEditorPresenter:
     @guarded
     def _on_load_sample(self) -> None:
         """Charge les premières lignes d'un log comme exemple."""
+        self._ask_sample_lines()
+
+    def _ask_sample_lines(self) -> Optional[List[str]]:
+        """Demande un log d'exemple et l'affiche dans l'éditeur.
+
+        :return: lignes chargées, ou ``None`` si l'utilisateur annule.
+        :raises LogWaverError: si le fichier est illisible.
+        """
         path = self._dialog.ask_open_path("Charger un log d'exemple", LOG_FILTER)
         if not path:
-            return
+            return None
         try:
             try:
                 text = Path(path).read_text(encoding=FILE_ENCODING)
@@ -169,8 +192,32 @@ class PluginEditorPresenter:
                 text = Path(path).read_text(encoding=LOG_FALLBACK_ENCODING)
         except OSError as error:
             raise LogWaverError(f"Lecture impossible de « {path} » : {error}") from error
-        self._dialog.set_sample_text("\n".join(text.splitlines()[:MAX_SAMPLE_LINES]))
-        self._on_clear_marks()
+        lines = text.splitlines()[:MAX_SAMPLE_LINES]
+        self._dialog.set_sample_text("\n".join(lines))
+        if not self._dialog.form_data().file_extensions and Path(path).suffix:
+            form = self._dialog.form_data()
+            self._dialog.set_form_data(PluginFormData(
+                form.tool_name, form.pdf_documentation, form.pdf_page_index, form.types,
+                Path(path).suffix.lower()))
+        return lines
+
+    @guarded
+    def _on_wizard(self) -> None:
+        """Ouvre l'assistant regex et applique son résultat au type choisi."""
+        wizard = self._dialog.create_regex_wizard(self._dialog.current_type_name())
+        result = RegexWizardPresenter(
+            wizard,
+            self._dialog.sample_text().splitlines(),
+            self._dialog.type_field_names,
+            self._ask_sample_lines,
+        ).run()
+        if result is None:
+            return
+        self._dialog.select_or_create_type(result.type_name)
+        self._dialog.apply_generated(result.regexes.detect_regex, result.regexes.field_regexes)
+        self._dialog.show_info(
+            f"Les regex du type « {result.type_name} » ont été mises à jour. Pensez à "
+            "enregistrer le plugin.")
 
     @guarded
     def _on_test(self, pattern: str, sample: str) -> None:
@@ -186,45 +233,6 @@ class PluginEditorPresenter:
         rows = [RegexTestRow(m.line_number, m.extracted, m.start, m.end)
                 for m in report.matches]
         self._dialog.show_test_result(rows, report.error, report.truncated)
-
-    # ============================================================ génération
-    @guarded
-    def _on_mark(self, mark: SelectionMark) -> None:
-        """Mémorise une sélection associée à un champ.
-
-        :param mark: sélection émise par la vue.
-        """
-        if any(existing.line_number != mark.line_number for existing in self._marks.values()):
-            self._marks.clear()
-            self._dialog.show_info(
-                "La sélection est sur une autre ligne : les marques précédentes "
-                "ont été réinitialisées (toutes les marques doivent être sur la même ligne)."
-            )
-        self._marks[mark.field_name] = mark
-        self._dialog.set_marks(list(self._marks.values()))
-
-    @guarded
-    def _on_clear_marks(self) -> None:
-        """Efface les sélections marquées."""
-        self._marks.clear()
-        self._dialog.set_marks([])
-
-    @guarded
-    def _on_generate(self) -> None:
-        """Génère les regex du type courant à partir des marques."""
-        if not self._dialog.current_type_name():
-            raise LogWaverError("Sélectionnez d'abord un type d'élément.")
-        if not self._marks:
-            raise LogWaverError("Marquez au moins un champ dans l'exemple.")
-        line_text = next(iter(self._marks.values())).line_text
-        spans = {name: (mark.start, mark.end) for name, mark in self._marks.items()}
-        generated = self._generator.generate(line_text, spans)
-        self._dialog.apply_generated(generated.detect_regex, generated.field_regexes)
-        self._dialog.show_info(
-            "Regex générées et vérifiées sur la ligne d'exemple. Contrôlez le "
-            "résultat du test sur l'ensemble de l'exemple, puis ajustez si besoin "
-            "(par exemple en remplaçant un mot fixe par \\S+)."
-        )
 
     # ============================================================ conversion
     @staticmethod
@@ -242,6 +250,7 @@ class PluginEditorPresenter:
                 PluginTypeData(t.name, t.detect_regex, t.field_regexes)
                 for t in definition.element_types
             ),
+            file_extensions=", ".join(definition.file_extensions),
         )
 
     @staticmethod
@@ -273,6 +282,7 @@ class PluginEditorPresenter:
             element_types=tuple(element_types),
             pdf_documentation=form.pdf_documentation,
             pdf_page_index=form.pdf_page_index,
+            file_extensions=normalize_extensions(form.file_extensions),
         )
 
     @staticmethod

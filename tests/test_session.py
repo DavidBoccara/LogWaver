@@ -100,7 +100,7 @@ class ProjectAndInheritanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             rules = Path(directory) / "a.lwj"
             session_a.export_rules(rules)
-            report = session_b.import_rules(rules, overwrite=False)
+            report = session_b.import_rules(rules)
         self.assertEqual(report.imported, 4)
         self.assertEqual(report.matched_entries, 3)
         sources = {j.source for j in session_b.justifications}

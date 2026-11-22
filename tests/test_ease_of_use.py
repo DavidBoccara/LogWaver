@@ -93,7 +93,7 @@ class PluginDetectionTests(unittest.TestCase):
     def test_unknown_log_is_not_matched(self) -> None:
         """Un log qu'aucun plugin ne reconnaît ne renvoie aucun candidat."""
         with tempfile.TemporaryDirectory() as directory:
-            log = Path(directory) / "autre.log"
+            log = Path(directory) / "autre.txt"
             log.write_text("rien de reconnaissable\n", encoding="utf-8")
             self.assertIsNone(PluginDetector([PROJECT_ROOT / "plugins"]).detect(log))
 

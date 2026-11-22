@@ -255,3 +255,7 @@ QLabel#TutorialText {
 QWidget#CategoryPanel {
     min-width: 210px;
 }
+
+QWidget#MatchingKeysContent {
+    background-color: #ffffff;
+}

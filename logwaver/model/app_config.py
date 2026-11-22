@@ -11,7 +11,7 @@ import configparser
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 from logwaver.constants import (
     ALLOWED_MATCH_KEYS,
@@ -33,16 +33,61 @@ SECTION_AI: str = "ai"
 
 @dataclass(frozen=True)
 class MatchingOptions:
-    """Options de calcul de l'empreinte des éléments.
+    """Règles de comparaison utilisées pour retrouver une justification.
 
-    :param keys: attributs utilisés pour l'empreinte.
+    Deux éléments sont considérés comme « le même » s'ils ont la même valeur
+    pour chaque attribut de ``keys``, après application des tolérances.
+
+    :param keys: attributs comparés.
     :param normalize_whitespace: fusionne les espaces multiples.
-    :param ignore_case: ignore la casse lors de la comparaison.
+    :param ignore_case: ignore la casse.
+    :param mask_numbers: ignore les nombres dans la description.
+    :param mask_quoted: ignore le texte entre guillemets ou apostrophes de la
+        description.
+    :param mask_paths: ignore les noms de fichiers et chemins de la description.
     """
 
     keys: Tuple[str, ...] = DEFAULT_MATCH_KEYS
     normalize_whitespace: bool = True
     ignore_case: bool = False
+    mask_numbers: bool = False
+    mask_quoted: bool = False
+    mask_paths: bool = False
+
+    def to_dict(self) -> Dict[str, object]:
+        """Sérialise les options (fichier projet).
+
+        :return: dictionnaire JSON-compatible.
+        """
+        return {
+            "keys": list(self.keys),
+            "normalize_whitespace": self.normalize_whitespace,
+            "ignore_case": self.ignore_case,
+            "mask_numbers": self.mask_numbers,
+            "mask_quoted": self.mask_quoted,
+            "mask_paths": self.mask_paths,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object],
+                  default: "MatchingOptions") -> "MatchingOptions":
+        """Reconstruit des options ; les attributs absents ou invalides
+        reprennent la valeur par défaut.
+
+        :param data: dictionnaire issu de :meth:`to_dict`.
+        :param default: options de repli.
+        :return: options reconstruites.
+        """
+        raw_keys = data.get("keys", default.keys)
+        keys = tuple(str(k) for k in raw_keys if str(k) in ALLOWED_MATCH_KEYS) \
+            if isinstance(raw_keys, (list, tuple)) else default.keys
+
+        def flag(name: str) -> bool:
+            value = data.get(name, getattr(default, name))
+            return value if isinstance(value, bool) else bool(getattr(default, name))
+
+        return cls(keys or default.keys, flag("normalize_whitespace"), flag("ignore_case"),
+                   flag("mask_numbers"), flag("mask_quoted"), flag("mask_paths"))
 
 
 @dataclass(frozen=True)
@@ -81,6 +126,15 @@ class AppConfig:
         """
         status = self.find_status(status_id)
         return status.label if status else status_id
+
+    def status_priority(self, status_id: str) -> int:
+        """Retourne la priorité d'une catégorie (0 si inconnue).
+
+        :param status_id: identifiant de la catégorie.
+        :return: priorité (la plus élevée l'emporte en cas de conflit).
+        """
+        status = self.find_status(status_id)
+        return status.priority if status else 0
 
 
 @dataclass(frozen=True)
@@ -187,6 +241,7 @@ class AppConfigLoader:
                     description=parser.get(section, "description",
                                            fallback=""),
                     color=parser.get(section, "color", fallback="#9e9e9e"),
+                    priority=self._read_int(parser, section, "priority"),
                 )
             )
         return tuple(statuses)
@@ -209,17 +264,33 @@ class AppConfigLoader:
                 f"Clés autorisées : {', '.join(ALLOWED_MATCH_KEYS)}."
             )
         try:
-            normalize = parser.getboolean(
-                SECTION_MATCHING, "normalize_whitespace", fallback=True
-            )
-            ignore_case = parser.getboolean(
-                SECTION_MATCHING, "ignore_case", fallback=False
-            )
+            flags = [parser.getboolean(SECTION_MATCHING, name, fallback=default)
+                     for name, default in (("normalize_whitespace", True),
+                                           ("ignore_case", False),
+                                           ("mask_numbers", False),
+                                           ("mask_quoted", False),
+                                           ("mask_paths", False))]
         except ValueError as error:
             raise ConfigurationError(
                 f"Valeur booléenne invalide dans [matching] : {error}"
             ) from error
-        return MatchingOptions(keys, normalize, ignore_case)
+        return MatchingOptions(keys, *flags)
+
+    @staticmethod
+    def _read_int(parser: configparser.ConfigParser, section: str, key: str) -> int:
+        """Lit un entier facultatif (0 par défaut).
+
+        :param parser: configuration INI déjà lue.
+        :param section: section concernée.
+        :param key: clé à lire.
+        :return: valeur entière.
+        :raises ConfigurationError: si la valeur n'est pas un entier.
+        """
+        try:
+            return parser.getint(section, key, fallback=0)
+        except ValueError as error:
+            raise ConfigurationError(
+                f"[{section}] {key} doit être un nombre entier : {error}") from error
 
     @staticmethod
     def _split_list(raw_value: str) -> List[str]:
