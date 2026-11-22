@@ -24,12 +24,15 @@ class StatusDefinition:
     :param label: libellé affiché à l'utilisateur.
     :param description: explication du sens de la catégorie.
     :param color: couleur d'affichage au format ``#RRGGBB``.
+    :param priority: priorité en cas de conflit entre deux justifications d'un
+        même élément (la plus élevée l'emporte).
     """
 
     status_id: str
     label: str
     description: str = ""
     color: str = "#9e9e9e"
+    priority: int = 0
 
 
 @dataclass(frozen=True)

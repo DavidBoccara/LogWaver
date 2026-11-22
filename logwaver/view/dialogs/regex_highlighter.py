@@ -8,6 +8,7 @@ from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QTextDocume
 
 MATCH_COLOR: str = "#ffe08a"
 MARK_COLOR: str = "#a8d8ff"
+IGNORED_COLOR: str = "#d9d9d9"
 
 Ranges = Dict[int, List[Tuple[int, int]]]
 
@@ -27,8 +28,10 @@ class RegexHighlighter(QSyntaxHighlighter):
         super().__init__(document)
         self._match_ranges: Ranges = {}
         self._mark_ranges: Ranges = {}
+        self._ignored_ranges: Ranges = {}
         self._match_format = self._make_format(MATCH_COLOR)
         self._mark_format = self._make_format(MARK_COLOR)
+        self._ignored_format = self._make_format(IGNORED_COLOR)
 
     def set_match_ranges(self, ranges: Ranges) -> None:
         """Définit les correspondances à surligner.
@@ -46,6 +49,14 @@ class RegexHighlighter(QSyntaxHighlighter):
         self._mark_ranges = ranges
         self.rehighlight()
 
+    def set_ignored_ranges(self, ranges: Ranges) -> None:
+        """Définit les parties variables ignorées à griser.
+
+        :param ranges: n° de ligne (1-based) → plages (début, fin).
+        """
+        self._ignored_ranges = ranges
+        self.rehighlight()
+
     def highlightBlock(self, text: str) -> None:  # noqa: N802
         """Colore une ligne du document (API Qt).
 
@@ -54,6 +65,7 @@ class RegexHighlighter(QSyntaxHighlighter):
         line_number = self.currentBlock().blockNumber() + 1
         self._apply(self._match_ranges.get(line_number), self._match_format, len(text))
         self._apply(self._mark_ranges.get(line_number), self._mark_format, len(text))
+        self._apply(self._ignored_ranges.get(line_number), self._ignored_format, len(text))
 
     def _apply(self, ranges: Optional[List[Tuple[int, int]]],
                text_format: QTextCharFormat, length: int) -> None:

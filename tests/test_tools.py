@@ -42,16 +42,42 @@ class RegexGeneratorTests(unittest.TestCase):
                              self.VALUES[name])
 
     def test_generated_regexes_generalize_to_other_lines(self) -> None:
-        """Les regex fonctionnent sur une autre ligne du même format."""
-        generated = RegexGenerator().generate(
-            SAMPLE_WARNING_LINE, spans_for(SAMPLE_WARNING_LINE, self.VALUES))
-        other = "[2027-01-02 23:59:59] WARNING CL999 a/b/c.h:7 - autre message ici"
+        """Les éléments sélectionnés peuvent varier complètement ; la date est ignorée."""
+        spans = spans_for(SAMPLE_WARNING_LINE, self.VALUES)
+        ignored = RegexGenerator.suggest_variable_parts(SAMPLE_WARNING_LINE, list(spans.values()))
+        self.assertEqual([SAMPLE_WARNING_LINE[a:b] for a, b in ignored], ["2026-11-20 10:01:02"])
+        generated = RegexGenerator().generate(SAMPLE_WARNING_LINE, spans, ignored)
+        other = "[hier, 23h59] WARNING XY-9 lib/b/c.h:sept - autre message, très différent"
         extracted = {name: extract_with_pattern(re.compile(regex), other)
                      for name, regex in generated.field_regexes}
-        self.assertEqual(extracted, {"code": "CL999", "file": "a/b/c.h", "line": "7",
-                                     "description": "autre message ici"})
+        self.assertEqual(extracted, {"code": "XY-9", "file": "lib/b/c.h", "line": "sept",
+                                     "description": "autre message, très différent"})
         self.assertIsNotNone(re.search(generated.detect_regex, other))
         self.assertIsNone(re.search(generated.detect_regex, other.replace("WARNING", "ERROR")))
+
+    def test_regex_relies_only_on_invariant_text(self) -> None:
+        """Une date non marquée comme variable fait partie du texte fixe."""
+        generated = RegexGenerator().generate(
+            SAMPLE_WARNING_LINE, spans_for(SAMPLE_WARNING_LINE, self.VALUES))
+        self.assertIn("2026", generated.detect_regex)
+        other = SAMPLE_WARNING_LINE.replace("2026-11-20", "2027-01-01")
+        self.assertIsNone(re.search(generated.detect_regex, other))
+
+    def test_adjacent_selections_are_rejected(self) -> None:
+        """Deux sélections collées sont refusées avec une explication."""
+        with self.assertRaises(RegexGenerationError):
+            RegexGenerator().generate(SAMPLE_WARNING_LINE, {"a": (0, 5), "b": (5, 9)})
+
+    def test_apply_reports_extracted_values(self) -> None:
+        """L'aperçu applique les regex à plusieurs lignes."""
+        spans = spans_for(SAMPLE_WARNING_LINE, self.VALUES)
+        generated = RegexGenerator().generate(
+            SAMPLE_WARNING_LINE, spans,
+            RegexGenerator.suggest_variable_parts(SAMPLE_WARNING_LINE, list(spans.values())))
+        lines = [SAMPLE_WARNING_LINE, "bruit", SAMPLE_WARNING_LINE]
+        results = RegexGenerator.apply(generated, lines)
+        self.assertEqual([r.line_number for r in results], [1, 3])
+        self.assertIn(("code", "CL245"), results[0].values)
 
     def test_overlapping_selection_is_rejected(self) -> None:
         """Des sélections qui se chevauchent sont refusées."""

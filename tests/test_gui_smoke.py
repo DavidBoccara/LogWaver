@@ -122,5 +122,61 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(steps, 10)
 
 
+@unittest.skipIf(QApplication is None, "PyQt5 non installé")
+class PluginToolsSmokeTests(unittest.TestCase):
+    """Assistant regex et règles de correspondance pilotés comme par l'utilisateur."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Crée l'application Qt partagée par les tests."""
+        cls.application = QApplication.instance() or QApplication([])
+
+    def test_regex_wizard_end_to_end(self) -> None:
+        """Type → ligne → éléments + date ignorée → vérification sur tout l'exemple."""
+        from logwaver.presenter.regex_wizard_presenter import RegexWizardPresenter
+        from logwaver.view.dialogs.regex_wizard_dialog import RegexWizardDialog
+        from tests.helpers import LOG_A_PATH, SAMPLE_WARNING_LINE
+
+        lines = LOG_A_PATH.read_text(encoding="utf-8").splitlines()
+        dialog = RegexWizardDialog(["Note", "Warning"], "Warning")
+        presenter = RegexWizardPresenter(dialog, lines, lambda _t: ["file", "line", "code",
+                                                                    "description"],
+                                         lambda: None)
+        dialog.type_chosen.emit("Warning")
+        dialog.line_chosen.emit(SAMPLE_WARNING_LINE)
+        for value, name in (("CL245", "code"), ("src/io/loader.c", "file"), ("42", "line"),
+                            ("le fichier dada.txt est introuvable", "description")):
+            start = SAMPLE_WARNING_LINE.index(value)
+            dialog.mark_requested.emit(name, start, start + len(value))
+        dialog.suggest_requested.emit()
+        dialog.check_requested.emit()
+        self.assertTrue(dialog.has_field_marks())
+        result = presenter._result  # noqa: SLF001 - test de présentateur
+        self.assertIsNotNone(result)
+        self.assertEqual(dialog._check_table.rowCount(), 5)  # noqa: SLF001 - les 5 warnings
+        dialog.deleteLater()
+
+    def test_matching_dialog_preview_and_apply(self) -> None:
+        """Le préréglage « Par code seulement » est prévisualisé puis appliqué."""
+        from logwaver.presenter.matching_rules_presenter import MatchingRulesPresenter
+        from logwaver.view.dialogs.matching_rules_dialog import MatchingRulesDialog
+        from tests.helpers import create_session
+
+        session = create_session()
+        first = next(e for e in session.entries if e.code == "CL300")
+        session.classify([first.entry_id], "justified", "ok")
+        dialog = MatchingRulesDialog(MatchingRulesPresenter.key_views(first, session),
+                                     MatchingRulesPresenter.preset_views(),
+                                     MatchingRulesPresenter.example_title(first))
+        presenter = MatchingRulesPresenter(dialog, session)
+        dialog.exec_ = lambda: (dialog.preset_selected.emit("by_code"),
+                                dialog.settings_changed.emit(dialog.settings()), 1)[2]
+        self.assertTrue(presenter.run(first))
+        self.assertIn("+1", dialog._effect_label.text())  # noqa: SLF001 - test de vue
+        self.assertTrue(all(session.justification_of(e)
+                            for e in session.entries if e.code == "CL300"))
+        dialog.deleteLater()
+
+
 if __name__ == "__main__":
     unittest.main()
