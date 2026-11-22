@@ -26,6 +26,7 @@ menée le 20 novembre 2026 avec l'assistant Claude.
 6. [Échange 6 — Publication de la version 1.1.0](#échange-6)
 7. [Échange 7 — Où trouver la nouvelle version ?](#échange-7)
 8. [Échange 8 — Plugins par extension, assistant regex, priorités et correspondance](#échange-8)
+9. [Échange 9 — Activation de GitHub Actions](#échange-9)
 5. [Registre des décisions de conception](#registre-des-décisions-de-conception)
 6. [Problèmes rencontrés et traitements](#problèmes-rencontrés-et-traitements)
 7. [Couverture des exigences](#couverture-des-exigences)
@@ -567,10 +568,73 @@ Application de la procédure de livraison du plan de gestion de configuration :
 11. Documentation (README, CHANGELOG 1.2.0), version 1.2.0, livraison sur
     `develop` puis `main`.
 
-### Réponse de l'assistant
+### Réponse de l'assistant (texte intégral)
 
-Le texte intégral de la réponse sera ajouté lors de la prochaine mise à jour
-de l'historique.
+> La version 1.2.0 est sur GitHub, dans `main` et `develop` : la page d'accueil du dépôt la montre directement. Seule l'étiquette `v1.2.0` n'a pas pu être envoyée (voir plus bas). Pour l'utiliser chez vous, faites `git pull` sur `main` ou retéléchargez le projet. Le menu *Aide > À propos* doit indiquer **1.2.0**.
+>
+> **1. Le plugin choisi selon l'extension**
+> - Chaque plugin peut déclarer les extensions des logs de son outil, par exemple `file_extensions = .log, .mx`. Un champ « Extensions des logs » permet de les saisir dans l'éditeur de plugin.
+> - Si un plugin déclare l'extension mais ne reconnaît aucune ligne du log, alors qu'un autre plugin en reconnaît, c'est ce dernier qui est choisi. Ainsi, une extension courante comme `.log` ne force pas le mauvais plugin.
+> - Si aucun plugin ne convient, l'outil demande quel outil a produit le fichier et propose : « Associer l'extension .mx au plugin ? ». Seule la ligne des extensions du plugin est alors modifiée ; vos commentaires restent intacts.
+>
+> **2. Un éditeur de plugin plus puissant**
+> - **Outils > Créer un nouveau plugin** part d'une page blanche, même si d'autres plugins existent. Le nouveau plugin est proposé à l'enregistrement dans le dossier `plugins/`, où il sera trouvé automatiquement.
+> - **L'assistant regex pas à pas** :
+>   1. on choisit le type, par exemple Warning ;
+>   2. on clique sur la ligne où il apparaît en entier ;
+>   3. on surligne les éléments (chemin, code, ligne, description, ou tout autre champ) et les parties qui changent sans intérêt, comme la date. Un bouton repère automatiquement les dates et les nombres ;
+>   4. on vérifie le résultat sur tout l'exemple : nombre de lignes reconnues et valeurs extraites de chacune.
+> - **La regex ne repose que sur le texte non sélectionné**, considéré comme fixe. Chaque élément sélectionné peut prendre n'importe quelle valeur. L'assistant affiche le modèle obtenu, par exemple `[‹…›] WARNING ‹Code› ‹Fichier›:‹Ligne› - ‹Description›`.
+>
+> **3. Les priorités**
+> - Chaque catégorie a une priorité : Rejeté 50, En cours d'analyse 40, À traiter 30, Justifié 20, Clôturé 10. Vous pouvez les changer dans `config/app_config.ini`.
+> - À l'import d'un projet ou des justifications d'un collègue, **la catégorie la plus prioritaire l'emporte** : un « Rejeté » remplace votre « Justifié ».
+> - **À priorité égale, votre justification est conservée.** C'est un choix de ma part, pour ne jamais écraser votre travail sans raison. Dites-moi si vous préférez que la plus récente l'emporte.
+> - Le bilan de l'import indique combien de justifications ont été ajoutées, remplacées ou écartées. Ctrl+Z annule l'import.
+>
+> **4. Choisir ce qui est comparé**
+>
+> Le menu **Édition > Règles de correspondance** (Ctrl+M) se veut le plus clair possible :
+> - **quatre choix rapides** : Strict, Recommandé, Tolérant, Par code seulement ;
+> - **chaque critère est illustré** par la valeur de l'élément sélectionné et par ce qui se passe si on le décoche ;
+> - **des tolérances sur le message** : ignorer le texte entre guillemets, les noms de fichiers, les nombres. Par exemple, « le fichier ‹…› est introuvable » rapproche *dada.txt* et *theme.qss* ;
+> - **un aperçu immédiat** : « Éléments justifiés : 2 → 3 (+1) », avec la liste des éléments qui retrouveraient une justification (et laquelle) ou en perdraient.
+>
+> Les règles sont enregistrées dans le projet. Changer les règles ne supprime jamais de justification : revenir au réglage précédent restaure exactement l'état d'avant.
+>
+> **Vérifications**
+> - 64 tests passent, dont 21 nouveaux. Les contrôles de style, l'analyse statique et la vérification de l'architecture passent aussi.
+> - J'ai joué les parcours dans l'interface : un `.xyz` reconnu par son contenu, puis un `.mx` choisi à la main et son extension mémorisée.
+> - J'ai vérifié l'assistant, le dialogue des règles et l'éditeur sur des captures, ce qui m'a fait corriger trois problèmes d'affichage.
+> - Un test a aussi révélé le cas de l'extension `.log` décrit au point 1, et j'ai corrigé la règle de choix.
+>
+> **Changement de format :** les fichiers projet sont désormais en version 2, pour enregistrer les règles de correspondance. Vos projets 1.x s'ouvrent toujours (c'est testé). En revanche, une ancienne version de LogWaver ne pourra pas ouvrir un projet enregistré en 1.2.0.
+>
+> **L'étiquette `v1.2.0` n'a pas pu être envoyée**, comme les fois précédentes. Depuis votre copie du dépôt :
+> ```bash
+> git fetch origin && git tag -a v1.2.0 origin/main -m "LogWaver 1.2.0" && git push origin v1.2.0
+> ```
+> Pour que la version apparaisse dans *Releases*, GitHub Actions doit être activé (*Settings > Actions*).
+>
+> L'historique de conception est à jour. Il contient mes réponses complètes aux deux échanges précédents, et cet échange avec votre demande mot pour mot, le travail réalisé, 9 nouvelles décisions (D33 à D41) et la couverture de chacune de vos demandes.
+
+---
+
+<a id="échange-9"></a>
+## Échange 9 — Activation de GitHub Actions (22/11, 12:35)
+
+### Demande de l'utilisateur
+
+> je viens d'activer l'acion
+
+### Travail réalisé
+
+Un workflow GitHub Actions ne se déclenche qu'au prochain envoi sur le dépôt.
+Le présent ajout à l'historique (réponse intégrale de l'échange 8) a été envoyé
+sur `develop` pour déclencher la première exécution de la CI. La publication des
+versions dans *Releases* reste déclenchée par l'envoi des étiquettes `vX.Y.Z`,
+que la connexion de la session de conception ne permet pas : l'utilisateur les
+envoie depuis son poste.
 
 ---
 
